@@ -1,21 +1,28 @@
 [submodule "components/smart-farm-common"]
 	path = components/smart-farm-common
 	url = https://github.com/aluiziotomazelli/smart-farm-common.git
+	branch = main
 [submodule "components/wifi_manager"]
 	path = components/wifi_manager
 	url = https://github.com/aluiziotomazelli/wifi_manager.git
+	branch = main
 [submodule "components/floatswitch"]
 	path = components/floatswitch
 	url = https://github.com/aluiziotomazelli/floatswitch.git
+	branch = main
 [submodule "components/power_control"]
 	path = components/power_control
 	url = https://github.com/aluiziotomazelli/power_control.git
+	branch = main
 [submodule "components/ultrasonic_sensor"]
 	path = components/ultrasonic_sensor
 	url = https://github.com/aluiziotomazelli/ultrasonic_sensor.git
+	branch = main
 [submodule "components/espnow_manager"]
 	path = components/espnow_manager
 	url = https://github.com/aluiziotomazelli/espnow_manager.git
+	branch = main
 [submodule "components/ota_manager"]
 	path = components/ota_manager
 	url = https://github.com/aluiziotomazelli/ota_manager.git
+	branch = main
