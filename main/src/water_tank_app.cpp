@@ -121,7 +121,7 @@ SensorStatus WaterTankApp::map_status(ultrasonic::UsResult result)
 
 void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
 {
-    ESP_LOGI(TAG, "Entering deep sleep for %llu us", sleep_time_us);
+    ESP_LOGI(TAG, "Entering deep sleep for %llu s", sleep_time_us / 1000000);
 
     sleep_.disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
 
