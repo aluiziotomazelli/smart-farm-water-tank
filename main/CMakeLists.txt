@@ -5,6 +5,7 @@ idf_component_register(
         "src/water_tank_nvs.cpp"
         "src/water_tank_logic.cpp"
         "src/tank_geometry.cpp"
+        "src/ota_controller.cpp"
     INCLUDE_DIRS
         "include"
         "."
@@ -16,4 +17,5 @@ idf_component_register(
         espnow_manager
         power_control
         wifi_manager
+        ota_manager
 )
