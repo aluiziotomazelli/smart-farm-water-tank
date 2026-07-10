@@ -71,7 +71,10 @@ void WaterTankApp::run()
     // 6. Transmit data to Hub
     send_report();
 
-    // 7. Calculate sleep and enter deep sleep
+    // 7. Listen for incoming commands (e.g. START_OTA) before sleeping
+    listen_for_commands(LISTEN_WINDOW_MS);
+
+    // 8. Calculate sleep and enter deep sleep
     uint64_t sleep_time_us = logic_.calculate_sleep_time_us(stats_);
     enter_deep_sleep(sleep_time_us);
 }
@@ -156,3 +159,32 @@ void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
 
     sleep_.deep_sleep_start();
 }
+
+void WaterTankApp::listen_for_commands(uint32_t timeout_ms)
+{
+    QueueHandle_t q = comm_.get_rx_queue();
+    if (!q) {
+        vTaskDelay(pdMS_TO_TICKS(timeout_ms));
+        return;
+    }
+
+    int64_t deadline_ms = (esp_timer_get_time() / 1000) + timeout_ms;
+    espnow::AppMessage msg;
+
+    while ((esp_timer_get_time() / 1000) < deadline_ms) {
+        int64_t remaining = deadline_ms - (esp_timer_get_time() / 1000);
+        if (remaining <= 0) break;
+        
+        if (xQueueReceive(q, &msg, pdMS_TO_TICKS(remaining)) == pdTRUE) {
+            if (msg.msg_type == espnow::MessageType::COMMAND) {
+                auto cmd = static_cast<espnow::CommandType>(msg.payload_type);
+                if (cmd == espnow::CommandType::START_OTA) {
+                    ESP_LOGW(TAG, "Received START_OTA command from Hub - triggering OTA");
+                    // OtaController will be wired here later
+                    ESP_LOGW(TAG, "OTA trigger not yet wired - future implementation.");
+                }
+            }
+        }
+    }
+}
+

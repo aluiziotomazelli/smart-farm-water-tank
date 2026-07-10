@@ -25,6 +25,8 @@ static constexpr uint64_t TIMER_STABLE_US = 5ULL * 60ULL * 1000000ULL; ///< Time
 static constexpr uint64_t TIMER_DRAIN_US = 2ULL * 60ULL * 1000000ULL;  ///< Time to sleep when tank is draining (2 min)
 static constexpr uint64_t TIMER_UNKNOWN_US = 60ULL * 1000000ULL; ///< Time to sleep when tank state is unknown (60 s)
 
+static constexpr uint32_t LISTEN_WINDOW_MS = 2000; ///< Listen window for commands before sleep
+
 static constexpr float WEAK_SLEEP_FACTOR = 0.5f;     ///< Factor to reduce sleep time when sensor reading is weak
 static constexpr float INVALID_SLEEP_FACTOR = 0.25f; ///< Factor to reduce sleep time when sensor reading is invalid
 
