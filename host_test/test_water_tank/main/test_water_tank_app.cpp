@@ -31,7 +31,7 @@ protected:
     TankGeometry geometry{10}; // offset 10cm (uint8_t)
     WaterTankLogic logic{geometry, mock_float_switch};
     
-    WaterTankApp app{mock_sensor, mock_float_switch, mock_storage, mock_comm, mock_wifi, mock_power, mock_sleep, mock_battery, logic};
+    WaterTankApp app{mock_sensor, mock_float_switch, mock_storage, mock_comm, mock_power, mock_sleep, mock_battery, logic};
 
     void SetUp() override {
         // Default behaviors
@@ -44,6 +44,7 @@ protected:
         ON_CALL(mock_battery, init()).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_battery, read(_)).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_battery, deinit()).WillByDefault(Return(ESP_OK));
+        ON_CALL(mock_float_switch, should_enable_wakeup()).WillByDefault(Return(false));
     }
 };
 

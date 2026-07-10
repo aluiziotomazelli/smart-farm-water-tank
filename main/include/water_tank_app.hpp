@@ -24,7 +24,6 @@ public:
         floatswitch::IFloatSwitch& float_switch,
         IWaterTankStorage& storage,
         espnow::IEspNowManager& comm,
-        wifi_manager::IWiFiManager& wifi,
         power_control::IPowerControl& power,
         ISleepHAL& sleep,
         battery_monitor::IBatteryMonitor& battery_monitor,
@@ -40,7 +39,6 @@ private:
     floatswitch::IFloatSwitch& float_switch_;
     IWaterTankStorage& storage_;
     espnow::IEspNowManager& comm_;
-    wifi_manager::IWiFiManager& wifi_;
     power_control::IPowerControl& power_;
     ISleepHAL& sleep_;
     battery_monitor::IBatteryMonitor& battery_monitor_;

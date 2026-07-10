@@ -22,14 +22,14 @@ macro(setup_gtest_coverage PROJECT_NAME EXECUTABLE_NAME)
         # Extraction command for coverage
         set(EXTRACT_COMMAND ${LCOV_PATH} --extract coverage.info)
         foreach(pattern ${EXTRACT_PATTERNS_${PROJECT_NAME}})
-            list(APPEND EXTRACT_COMMAND "${pattern}")
+            list(APPEND EXTRACT_COMMAND "'${pattern}'")
         endforeach()
         list(APPEND EXTRACT_COMMAND --output-file coverage_temp.info --rc branch_coverage=1 --ignore-errors mismatch,inconsistent,unused,empty)
 
         # Removal command for coverage
         set(REMOVE_COMMAND ${LCOV_PATH} --remove coverage_temp.info)
         foreach(pattern ${REMOVE_PATTERNS_${PROJECT_NAME}})
-            list(APPEND REMOVE_COMMAND "${pattern}")
+            list(APPEND REMOVE_COMMAND "'${pattern}'")
         endforeach()
         list(APPEND REMOVE_COMMAND --output-file coverage_filtered.info --rc branch_coverage=1 --ignore-errors mismatch,inconsistent,unused,empty)        
 

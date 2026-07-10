@@ -10,7 +10,6 @@ WaterTankApp::WaterTankApp(
     floatswitch::IFloatSwitch& float_switch,
     IWaterTankStorage& storage,
     espnow::IEspNowManager& comm,
-    wifi_manager::IWiFiManager& wifi,
     power_control::IPowerControl& power,
     ISleepHAL& sleep,
     battery_monitor::IBatteryMonitor& battery_monitor,
@@ -19,7 +18,6 @@ WaterTankApp::WaterTankApp(
     , float_switch_(float_switch)
     , storage_(storage)
     , comm_(comm)
-    , wifi_(wifi)
     , power_(power)
     , sleep_(sleep)
     , battery_monitor_(battery_monitor)
@@ -139,6 +137,18 @@ void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
     ESP_LOGI(TAG, "Entering deep sleep for %llu s", sleep_time_us / 1000000);
 
     sleep_.disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+
+    stats_.gpio_wakeup_enabled = false;
+    if (float_switch_.should_enable_wakeup()) {
+        int gpio_num;
+        bool wake_high;
+        if (float_switch_.get_wakeup_config(gpio_num, wake_high) == ESP_OK) {
+            if (sleep_.enable_gpio_wakeup(gpio_num, wake_high) == ESP_OK) {
+                stats_.gpio_wakeup_enabled = true;
+                ESP_LOGI(TAG, "GPIO wakeup enabled on pin %d (wake_on_high=%d)", gpio_num, wake_high);
+            }
+        }
+    }
 
     if (sleep_time_us > 0) {
         sleep_.enable_timer_wakeup(sleep_time_us);

@@ -124,7 +124,7 @@ static OtaConfig ota_config{
     .task_priority = 5,
     .transport = {.manifest_timeout_ms = 30000, .firmware_timeout_ms = 30000},
     .security = {.allow_http_during_development = true},
-    .allow_same_version = true, // allows same version in test bench
+    .allow_same_version = false,
     .restart_on_success = true,
 };
 static OtaManager ota_manager(ota_deps);
@@ -191,7 +191,6 @@ static esp_err_t setup_hardware()
         return err;
     }
     power.turn_on();
-    // vTaskDelay(pdMS_TO_TICKS(1000));
 
     // UsSensor
     if ((err = sensor_us.init()) != ESP_OK) {
@@ -239,7 +238,7 @@ extern "C" void app_main()
     }
 
     // Instantiate app with dependencies
-    WaterTankApp app(sensor_adapter, float_switch, storage_adapter, espnow, wifi, power, sleep_hw, bat_monitor, logic);
+    WaterTankApp app(sensor_adapter, float_switch, storage_adapter, espnow, power, sleep_hw, bat_monitor, logic);
 
     // Run the main application flow
     app.run();
