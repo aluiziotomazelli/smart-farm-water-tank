@@ -24,6 +24,7 @@ public:
         floatswitch::IFloatSwitch& float_switch,
         IWaterTankStorage& storage,
         espnow::IEspNowManager& comm,
+        QueueHandle_t rx_queue,
         power_control::IPowerControl& power,
         ISleepHAL& sleep,
         battery_monitor::IBatteryMonitor& battery_monitor,
@@ -39,6 +40,7 @@ private:
     floatswitch::IFloatSwitch& float_switch_;
     IWaterTankStorage& storage_;
     espnow::IEspNowManager& comm_;
+    QueueHandle_t rx_queue_;
     power_control::IPowerControl& power_;
     ISleepHAL& sleep_;
     battery_monitor::IBatteryMonitor& battery_monitor_;

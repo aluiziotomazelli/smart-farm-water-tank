@@ -140,6 +140,7 @@ static OtaControllerConfig ota_ctrl_config{
 };
 
 // Setup Hardware
+static QueueHandle_t app_rx_queue = nullptr;
 static esp_err_t setup_hardware()
 {
     esp_err_t err;
@@ -176,7 +177,8 @@ static esp_err_t setup_hardware()
     espnow::EspNowConfig config;
     config.node_id = static_cast<espnow::NodeId>(FarmNodeId::WATER_TANK);
     config.node_type = static_cast<espnow::NodeType>(FarmNodeType::SENSOR);
-    config.app_rx_queue = xQueueCreate(30, sizeof(espnow::AppMessage));
+    app_rx_queue = xQueueCreate(30, sizeof(espnow::AppMessage));
+    config.app_rx_queue = app_rx_queue;
     config.wifi_channel = 1;
 
     espnow::EspNowManager& espnow = espnow::EspNowManager::instance();
@@ -238,7 +240,7 @@ extern "C" void app_main()
     }
 
     // Instantiate app with dependencies
-    WaterTankApp app(sensor_adapter, float_switch, storage_adapter, espnow, power, sleep_hw, bat_monitor, logic);
+    WaterTankApp app(sensor_adapter, float_switch, storage_adapter, espnow, app_rx_queue, power, sleep_hw, bat_monitor, logic);
 
     // Run the main application flow
     app.run();

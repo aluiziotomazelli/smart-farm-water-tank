@@ -10,6 +10,7 @@ WaterTankApp::WaterTankApp(
     floatswitch::IFloatSwitch& float_switch,
     IWaterTankStorage& storage,
     espnow::IEspNowManager& comm,
+    QueueHandle_t rx_queue,
     power_control::IPowerControl& power,
     ISleepHAL& sleep,
     battery_monitor::IBatteryMonitor& battery_monitor,
@@ -18,6 +19,7 @@ WaterTankApp::WaterTankApp(
     , float_switch_(float_switch)
     , storage_(storage)
     , comm_(comm)
+    , rx_queue_(rx_queue)
     , power_(power)
     , sleep_(sleep)
     , battery_monitor_(battery_monitor)
@@ -162,8 +164,7 @@ void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
 
 void WaterTankApp::listen_for_commands(uint32_t timeout_ms)
 {
-    QueueHandle_t q = comm_.get_rx_queue();
-    if (!q) {
+    if (!rx_queue_) {
         vTaskDelay(pdMS_TO_TICKS(timeout_ms));
         return;
     }
@@ -175,7 +176,7 @@ void WaterTankApp::listen_for_commands(uint32_t timeout_ms)
         int64_t remaining = deadline_ms - (esp_timer_get_time() / 1000);
         if (remaining <= 0) break;
         
-        if (xQueueReceive(q, &msg, pdMS_TO_TICKS(remaining)) == pdTRUE) {
+        if (xQueueReceive(rx_queue_, &msg, pdMS_TO_TICKS(remaining)) == pdTRUE) {
             if (msg.msg_type == espnow::MessageType::COMMAND) {
                 auto cmd = static_cast<espnow::CommandType>(msg.payload_type);
                 if (cmd == espnow::CommandType::START_OTA) {

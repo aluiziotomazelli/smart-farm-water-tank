@@ -22,7 +22,6 @@ public:
     MOCK_METHOD(esp_err_t, reconnect, (), (override));
     MOCK_METHOD(NodeState, get_node_state, (), (const, override));
     MOCK_METHOD(bool, is_initialized, (), (const, override));
-    MOCK_METHOD(QueueHandle_t, get_rx_queue, (), (const, override));
 };
 
 } // namespace espnow
