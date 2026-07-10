@@ -1,1 +1,36 @@
-# components/battery_monitor/idf_component.yml
+# Battery Monitor Component Manifest
+version: "1.0.0"
+description: "A flexible and testable ESP-IDF component for battery monitoring on ESP32-C3."
+maintainers:
+  - "aluiziotomazelli"
+
+license: "MIT"
+
+tags:
+  - battery
+  - monitor
+  - adc
+  - oneshot
+  - esp32
+  - cpp
+
+targets:
+  - esp32
+  - esp32s2
+  - esp32s3
+  - esp32c2
+  - esp32c3
+  - esp32c6
+  - esp32h2
+  - linux
+
+dependencies:
+  idf: ">=5.0"
+
+files:
+  use_gitignore: true
+  exclude:
+    - "host_test/**/*"
+    - "test_apps/**/*"
+    - .clang-format
+    - .gitignore
