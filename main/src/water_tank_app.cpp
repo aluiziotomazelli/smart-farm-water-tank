@@ -14,6 +14,7 @@ WaterTankApp::WaterTankApp(
     power_control::IPowerControl& power,
     ISleepHAL& sleep,
     battery_monitor::IBatteryMonitor& battery_monitor,
+    smart_farm::ISmHalTimer& sys_timer,
     WaterTankLogic& logic)
     : sensor_(sensor)
     , float_switch_(float_switch)
@@ -23,6 +24,7 @@ WaterTankApp::WaterTankApp(
     , power_(power)
     , sleep_(sleep)
     , battery_monitor_(battery_monitor)
+    , sys_timer_(sys_timer)
     , logic_(logic)
 {
 }
@@ -169,11 +171,11 @@ void WaterTankApp::listen_for_commands(uint32_t timeout_ms)
         return;
     }
 
-    int64_t deadline_ms = (esp_timer_get_time() / 1000) + timeout_ms;
+    int64_t deadline_ms = (sys_timer_.get_time_us() / 1000) + timeout_ms;
     espnow::AppMessage msg;
 
-    while ((esp_timer_get_time() / 1000) < deadline_ms) {
-        int64_t remaining = deadline_ms - (esp_timer_get_time() / 1000);
+    while ((sys_timer_.get_time_us() / 1000) < deadline_ms) {
+        int64_t remaining = deadline_ms - (sys_timer_.get_time_us() / 1000);
         if (remaining <= 0) break;
         
         if (xQueueReceive(rx_queue_, &msg, pdMS_TO_TICKS(remaining)) == pdTRUE) {

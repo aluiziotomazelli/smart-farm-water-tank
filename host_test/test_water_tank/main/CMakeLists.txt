@@ -18,6 +18,7 @@ idf_component_register(
         "../../../components/power_control/include"
         "../../../components/battery_monitor/include"
         "../../../components/battery_monitor/include/interfaces"
+        "../../../components/smart-farm-common/host_test/common"
     REQUIRES 
         gtest
         common

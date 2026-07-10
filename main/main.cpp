@@ -15,6 +15,7 @@
 #include "ota_manager.hpp"
 #include "boot_button_ota_trigger.hpp"
 #include "ota_controller.hpp"
+#include "sm_hal_timer.hpp"
 
 #include "wifi_manager.hpp"
 
@@ -87,6 +88,9 @@ static UltrasonicLevelSensorAdapter sensor_adapter{sensor_us};
 
 // SleepHAL
 static SleepHAL sleep_hw;
+
+// SmHalTimer
+static smart_farm::SmHalTimer sys_timer;
 
 // NVS
 static HalNvs hal_nvs;
@@ -240,7 +244,7 @@ extern "C" void app_main()
     }
 
     // Instantiate app with dependencies
-    WaterTankApp app(sensor_adapter, float_switch, storage_adapter, espnow, app_rx_queue, power, sleep_hw, bat_monitor, logic);
+    WaterTankApp app(sensor_adapter, float_switch, storage_adapter, espnow, app_rx_queue, power, sleep_hw, bat_monitor, sys_timer, logic);
 
     // Run the main application flow
     app.run();

@@ -11,6 +11,7 @@
 #include "mock_hal_sleep.hpp"
 #include "mock_i_battery_monitor.hpp"
 #include "tank_geometry.hpp"
+#include "mock_i_sm_hal_timer.hpp"
 
 using ::testing::_;
 using ::testing::Return;
@@ -27,12 +28,13 @@ protected:
     testing::NiceMock<power_control::MockPowerControl> mock_power;
     testing::NiceMock<MockSleepHAL> mock_sleep;
     testing::NiceMock<battery_monitor::MockBatteryMonitor> mock_battery;
+    testing::NiceMock<smart_farm::MockSmHalTimer> mock_sys_timer;
     
     TankGeometry geometry{10}; // offset 10cm (uint8_t)
     WaterTankLogic logic{geometry, mock_float_switch};
     QueueHandle_t dummy_queue = nullptr;
     
-    WaterTankApp app{mock_sensor, mock_float_switch, mock_storage, mock_comm, dummy_queue, mock_power, mock_sleep, mock_battery, logic};
+    WaterTankApp app{mock_sensor, mock_float_switch, mock_storage, mock_comm, dummy_queue, mock_power, mock_sleep, mock_battery, mock_sys_timer, logic};
 
     void SetUp() override {
         // Default behaviors
