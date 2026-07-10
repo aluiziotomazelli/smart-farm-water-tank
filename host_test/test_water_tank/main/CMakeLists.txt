@@ -16,6 +16,8 @@ idf_component_register(
         "../../../components/wifi_manager/include"
         "../../../components/espnow_manager/include"
         "../../../components/power_control/include"
+        "../../../components/battery_monitor/include"
+        "../../../components/battery_monitor/include/interfaces"
     REQUIRES 
         gtest
         common
@@ -24,6 +26,7 @@ idf_component_register(
         espnow_manager
         power_control
         nvs_core
+        battery_monitor
         WHOLE_ARCHIVE
 )
 

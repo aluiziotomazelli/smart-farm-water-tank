@@ -18,6 +18,12 @@
 
 #include "wifi_manager.hpp"
 
+#include "battery_monitor.hpp"
+#include "adc_battery_reader.hpp"
+#include "hal_adc_oneshot.hpp"
+#include "hal_adc_calibration.hpp"
+#include "bm_hal_timer.hpp"
+
 static const char* TAG = "main";
 
 // Production Configuration for XIAO-ESP32-C3 Mini Board
@@ -45,6 +51,30 @@ floatswitch::Config float_switch_config = {
     .wakeup_on = floatswitch::WakeupCondition::WHEN_TANK_IS_EMPTY};
 
 static floatswitch::FloatSwitch float_switch{float_switch_config, gpio_hal_fs, timer_hal};
+
+// BatteryMonitor
+static battery_monitor::HalAdcOneshot oneshot_hal;
+static battery_monitor::HalAdcCalibration cali_hal;
+static battery_monitor::BmHalTimer timer_hal_bm;
+
+static battery_monitor::BatteryAdcConfig adc_config = {
+    .gpio_num = static_cast<int>(BATTERY_LEVEL_GPIO),
+    .sample_count = 16,
+    .sample_delay_us = 1000,
+    .enable_calibration = true
+};
+
+static battery_monitor::BatteryMonitorConfig monitor_config = {
+    .divider_top_ohms = 240000,
+    .divider_bottom_ohms = 240000,
+    .empty_mv = 3000,
+    .full_mv = 4200,
+    .low_mv = 3400,
+    .critical_mv = 3200
+};
+
+static battery_monitor::AdcBatteryReader adc_reader{oneshot_hal, cali_hal, timer_hal_bm, adc_config};
+static battery_monitor::BatteryMonitor bat_monitor{adc_reader, monitor_config};
 
 // Ultrasonic Sensor
 ultrasonic::UsConfig us_config{
@@ -213,7 +243,7 @@ extern "C" void app_main()
     }
 
     // Instantiate app with dependencies
-    WaterTankApp app(sensor_adapter, float_switch, storage_adapter, espnow, wifi, power, sleep_hw, logic);
+    WaterTankApp app(sensor_adapter, float_switch, storage_adapter, espnow, wifi, power, sleep_hw, bat_monitor, logic);
 
     // Run the main application flow
     app.run();

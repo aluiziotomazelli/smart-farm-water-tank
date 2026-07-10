@@ -9,6 +9,7 @@
 #include "mock_i_wifi_manager.hpp"
 #include "mock_i_power_control.hpp"
 #include "mock_hal_sleep.hpp"
+#include "mock_i_battery_monitor.hpp"
 #include "tank_geometry.hpp"
 
 using ::testing::_;
@@ -25,11 +26,12 @@ protected:
     wifi_manager::MockWiFiManager mock_wifi;
     power_control::MockPowerControl mock_power;
     MockSleepHAL mock_sleep;
+    battery_monitor::MockBatteryMonitor mock_battery;
     
     TankGeometry geometry{10}; // offset 10cm (uint8_t)
     WaterTankLogic logic{geometry, mock_float_switch};
     
-    WaterTankApp app{mock_sensor, mock_float_switch, mock_storage, mock_comm, mock_wifi, mock_power, mock_sleep, logic};
+    WaterTankApp app{mock_sensor, mock_float_switch, mock_storage, mock_comm, mock_wifi, mock_power, mock_sleep, mock_battery, logic};
 
     void SetUp() override {
         // Default behaviors
@@ -39,6 +41,9 @@ protected:
         ON_CALL(mock_sleep, disable_wakeup_source(_)).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_sleep, enable_timer_wakeup(_)).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_sleep, deep_sleep_start()).WillByDefault(Return());
+        ON_CALL(mock_battery, init()).WillByDefault(Return(ESP_OK));
+        ON_CALL(mock_battery, read(_)).WillByDefault(Return(ESP_OK));
+        ON_CALL(mock_battery, deinit()).WillByDefault(Return(ESP_OK));
     }
 };
 
@@ -58,7 +63,12 @@ TEST_F(WaterTankAppTest, Run_ExecutesFullOrchestrationFlow) {
     // 4. Save state
     EXPECT_CALL(mock_storage, save(_)).Times(1);
 
-    // 5. Transmit data
+    // 5. Read battery status
+    EXPECT_CALL(mock_battery, init()).Times(1);
+    EXPECT_CALL(mock_battery, read(_)).Times(1);
+    EXPECT_CALL(mock_battery, deinit()).Times(1);
+
+    // 6. Transmit data
     EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).WillOnce(Return(ESP_OK));
 
     // 6. Enter deep sleep

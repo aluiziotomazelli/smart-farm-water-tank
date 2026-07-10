@@ -18,4 +18,5 @@ idf_component_register(
         power_control
         wifi_manager
         ota_manager
+        battery_monitor
 )

@@ -9,6 +9,7 @@ list(APPEND EXTRA_COMPONENT_DIRS
     "../../components/power_control"
     "../../components/espnow_manager"
     "../../components/wifi_manager"
+    "../../components/battery_monitor"
     "../common"
     "../gtest"
     
@@ -27,6 +28,7 @@ set(COMPONENTS
     "floatswitch"
     "espnow_manager"
     "power_control"
+    "battery_monitor"
 )
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)

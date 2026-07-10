@@ -9,6 +9,7 @@
 #include "water_tank_logic.hpp"
 #include "water_tank_stats.hpp"
 #include "i_float_switch.hpp" // Adding component include
+#include "interfaces/i_battery_monitor.hpp"
 
 /**
  * @class WaterTankApp
@@ -26,6 +27,7 @@ public:
         wifi_manager::IWiFiManager& wifi,
         power_control::IPowerControl& power,
         ISleepHAL& sleep,
+        battery_monitor::IBatteryMonitor& battery_monitor,
         WaterTankLogic& logic);
 
     /**
@@ -41,11 +43,12 @@ private:
     wifi_manager::IWiFiManager& wifi_;
     power_control::IPowerControl& power_;
     ISleepHAL& sleep_;
+    battery_monitor::IBatteryMonitor& battery_monitor_;
     WaterTankLogic& logic_;
 
     WaterTankStats stats_;
 
-    esp_err_t send_report();
+    esp_err_t send_report(uint16_t battery_mv);
     SensorStatus map_status(ultrasonic::UsResult result);
     void enter_deep_sleep(uint64_t sleep_time_us);
 };
