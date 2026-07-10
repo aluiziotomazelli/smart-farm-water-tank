@@ -26,3 +26,7 @@
 	path = components/ota_manager
 	url = https://github.com/aluiziotomazelli/ota_manager.git
 	branch = main
+[submodule "components/battery_monitor"]
+	path = components/battery_monitor
+	url = https://github.com/aluiziotomazelli/battery_monitor.git
+	branch = main
