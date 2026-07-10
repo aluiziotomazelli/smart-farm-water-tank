@@ -60,19 +60,18 @@ void WaterTankApp::run()
     storage_.save(stats_);
 
     // 5. Read battery status
-    uint16_t battery_mv = 0;
     if (battery_monitor_.init() == ESP_OK) {
         battery_monitor::BatteryReading bat_reading;
         if (battery_monitor_.read(bat_reading) == ESP_OK) {
-            battery_mv = bat_reading.voltage_mv;
+            logic_.process_battery(bat_reading.voltage_mv, stats_);
             ESP_LOGI(TAG, "Battery: %d mV (%d%%), state: %d", 
-                     bat_reading.voltage_mv, bat_reading.percent, static_cast<int>(bat_reading.state));
+                     stats_.last_battery_mv, stats_.last_battery_percent, static_cast<int>(stats_.last_battery_state));
         }
         battery_monitor_.deinit();
     }
 
     // 6. Transmit data to Hub
-    send_report(battery_mv);
+    send_report();
 
     // 7. Calculate sleep and enter deep sleep
     uint64_t sleep_time_us = logic_.calculate_sleep_time_us(stats_);
@@ -83,13 +82,15 @@ void WaterTankApp::run()
 // PRIVATE METHODS
 // =====================================================================
 
-esp_err_t WaterTankApp::send_report(uint16_t battery_mv)
+esp_err_t WaterTankApp::send_report()
 {
     WaterLevelReport report = {};
 
     report.level_permille = stats_.level_permille;
     report.distance_cm = stats_.last_distance_cm;
-    report.battery_mv = battery_mv;
+    report.battery_mv = stats_.last_battery_mv;
+    report.battery_percent = stats_.last_battery_percent;
+    report.battery_state = stats_.last_battery_state;
     report.status = map_status(stats_.last_result);
 
     report.float_switch_is_full = float_switch_.is_tank_full();

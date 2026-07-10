@@ -47,5 +47,10 @@ struct WaterTankStats
     bool backup_mode_active = false;
     uint8_t consecutive_failures = 0;
 
+    // --- Battery Stats ---
+    uint16_t last_battery_mv = 0;
+    uint8_t last_battery_percent = 0;
+    BatteryState last_battery_state = BatteryState::UNKNOWN;
+
     void reset() { *this = {}; }
 };

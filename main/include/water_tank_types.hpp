@@ -13,6 +13,11 @@ static constexpr uint8_t SENSOR_OFFSET_CM = 27; ///< Offset of the sensor from t
 static constexpr float SENSOR_MIN_DISTANCE_CM = 15.0f;  ///< Minimum distance for sensor valid measure
 static constexpr float SENSOR_MAX_DISTANCE_CM = 200.0f; ///< Maximum distance for sensor valid measure
 
+static constexpr uint16_t BATTERY_EMPTY_MV = 3000;       ///< Voltage threshold representing 0% battery (millivolts)
+static constexpr uint16_t BATTERY_FULL_MV = 4200;        ///< Voltage threshold representing 100% battery (millivolts)
+static constexpr uint16_t BATTERY_LOW_MV = 3400;         ///< Voltage threshold representing low battery level (millivolts)
+static constexpr uint16_t BATTERY_CRITICAL_MV = 3200;    ///< Voltage threshold representing critical battery level (millivolts)
+
 static constexpr uint16_t LEVEL_DELTA_MIN = 5; ///< Minimum level change to detect (5 ppm)
 
 static constexpr uint64_t TIMER_FILLING_US = 60ULL * 1000000ULL;       ///< Time to sleep when tank is filling (60 s)

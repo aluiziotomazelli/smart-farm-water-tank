@@ -20,6 +20,8 @@ public:
 
     void update_operation_mode(WaterTankStats& stats) const;
 
+    void process_battery(uint16_t battery_mv, WaterTankStats& stats) const;
+
 private:
     const TankGeometry& geometry_;
     floatswitch::IFloatSwitch& float_switch_;

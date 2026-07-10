@@ -83,3 +83,54 @@ TEST_F(WaterTankLogicTest, SleepTimeInBackupModeDependsOnFloatSwitch)
     EXPECT_CALL(mock_fs, is_tank_full()).WillOnce(Return(true));
     EXPECT_EQ(logic.calculate_sleep_time_us(stats), TIMER_STABLE_US); // 5min (TIMER_STABLE_US)
 }
+
+TEST_F(WaterTankLogicTest, ProcessBatteryCalculatesPercentAndState)
+{
+    // 1. Initial UNKNOWN state, normal voltage (3600 mV -> 50%)
+    logic.process_battery(3600, stats);
+    EXPECT_EQ(stats.last_battery_mv, 3600);
+    EXPECT_EQ(stats.last_battery_percent, 50);
+    EXPECT_EQ(stats.last_battery_state, BatteryState::NORMAL);
+
+    // 2. Linear capping (above full)
+    logic.process_battery(4300, stats);
+    EXPECT_EQ(stats.last_battery_percent, 100);
+    EXPECT_EQ(stats.last_battery_state, BatteryState::FULL);
+
+    // 3. Linear capping (below empty)
+    logic.process_battery(2900, stats);
+    EXPECT_EQ(stats.last_battery_percent, 0);
+    EXPECT_EQ(stats.last_battery_state, BatteryState::CRITICAL);
+}
+
+TEST_F(WaterTankLogicTest, ProcessBatteryAppliesStateHysteresis)
+{
+    // Start with NORMAL
+    logic.process_battery(3600, stats);
+    ASSERT_EQ(stats.last_battery_state, BatteryState::NORMAL);
+
+    // Drop to exactly LOW threshold (3400 mV) -> State becomes LOW
+    logic.process_battery(3400, stats);
+    EXPECT_EQ(stats.last_battery_state, BatteryState::LOW);
+
+    // Slight recovery to 3430 mV (less than 3400 + 50 mV hysteresis) -> State should remain LOW
+    logic.process_battery(3430, stats);
+    EXPECT_EQ(stats.last_battery_state, BatteryState::LOW);
+
+    // Recover past hysteresis threshold (3460 mV) -> State becomes NORMAL
+    logic.process_battery(3460, stats);
+    EXPECT_EQ(stats.last_battery_state, BatteryState::NORMAL);
+
+    // Drop to exactly CRITICAL threshold (3200 mV) -> State becomes CRITICAL
+    logic.process_battery(3200, stats);
+    EXPECT_EQ(stats.last_battery_state, BatteryState::CRITICAL);
+
+    // Slight recovery to 3230 mV -> State should remain CRITICAL
+    logic.process_battery(3230, stats);
+    EXPECT_EQ(stats.last_battery_state, BatteryState::CRITICAL);
+
+    // Recovery to 3260 mV (past 3200 + 50 mV hysteresis) -> State becomes LOW
+    logic.process_battery(3260, stats);
+    EXPECT_EQ(stats.last_battery_state, BatteryState::LOW);
+}
+
