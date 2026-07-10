@@ -19,14 +19,14 @@ using ::testing::SaveArg;
 
 class WaterTankAppTest : public ::testing::Test {
 protected:
-    MockLevelSensor mock_sensor;
-    floatswitch::MockFloatSwitch mock_float_switch;
-    MockWaterTankStorage mock_storage;
-    espnow::MockEspNowManager mock_comm;
-    wifi_manager::MockWiFiManager mock_wifi;
-    power_control::MockPowerControl mock_power;
-    MockSleepHAL mock_sleep;
-    battery_monitor::MockBatteryMonitor mock_battery;
+    testing::NiceMock<MockLevelSensor> mock_sensor;
+    testing::NiceMock<floatswitch::MockFloatSwitch> mock_float_switch;
+    testing::NiceMock<MockWaterTankStorage> mock_storage;
+    testing::NiceMock<espnow::MockEspNowManager> mock_comm;
+    testing::NiceMock<wifi_manager::MockWiFiManager> mock_wifi;
+    testing::NiceMock<power_control::MockPowerControl> mock_power;
+    testing::NiceMock<MockSleepHAL> mock_sleep;
+    testing::NiceMock<battery_monitor::MockBatteryMonitor> mock_battery;
     
     TankGeometry geometry{10}; // offset 10cm (uint8_t)
     WaterTankLogic logic{geometry, mock_float_switch};
