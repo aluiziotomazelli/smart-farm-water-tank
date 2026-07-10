@@ -66,11 +66,7 @@ static battery_monitor::BatteryAdcConfig adc_config = {
 
 static battery_monitor::BatteryMonitorConfig monitor_config = {
     .divider_top_ohms = 240000,
-    .divider_bottom_ohms = 240000,
-    .empty_mv = 3000,
-    .full_mv = 4200,
-    .low_mv = 3400,
-    .critical_mv = 3200
+    .divider_bottom_ohms = 240000
 };
 
 static battery_monitor::AdcBatteryReader adc_reader{oneshot_hal, cali_hal, timer_hal_bm, adc_config};
