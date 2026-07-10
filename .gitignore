@@ -23,3 +23,7 @@ host_test/**/coverage/
 **/secrets.h
 **/secrets.hpp
 .env
+
+# Local logs
+todo/
+
