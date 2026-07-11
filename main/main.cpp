@@ -15,7 +15,7 @@
 #include "ota_manager.hpp"
 #include "boot_button_ota_trigger.hpp"
 #include "ota_controller.hpp"
-#include "sm_hal_timer.hpp"
+#include "interfaces/i_sm_hal_timer.hpp"
 
 #include "wifi_manager.hpp"
 
@@ -23,9 +23,46 @@
 #include "adc_battery_reader.hpp"
 #include "hal_adc_oneshot.hpp"
 #include "hal_adc_calibration.hpp"
-#include "bm_hal_timer.hpp"
+#include "hal_sys_rom.hpp"
+#include "hal_gpio.hpp"
+#include "hal_timer.hpp"
+#include "hal_nvs.hpp"
 
 static const char* TAG = "main";
+
+// Adapter to map idf_hals::INvsHAL to IHalNvs required by nvs_core
+class NvsAdapter : public IHalNvs {
+public:
+    explicit NvsAdapter(idf_hals::INvsHAL& idf_nvs) : idf_nvs_(idf_nvs) {}
+
+    esp_err_t hal_nvs_flash_init() override { return idf_nvs_.flash_init(); }
+    esp_err_t hal_nvs_flash_erase() override { return idf_nvs_.flash_erase(); }
+    esp_err_t hal_nvs_erase_all(nvs_handle_t handle) override { return idf_nvs_.erase_all(handle); }
+    esp_err_t hal_nvs_open(const char *name, nvs_open_mode_t open_mode, nvs_handle_t *out_handle) override {
+        return idf_nvs_.open(name, open_mode, out_handle);
+    }
+    void hal_nvs_close(nvs_handle_t handle) override { idf_nvs_.close(handle); }
+    esp_err_t hal_nvs_set_blob(nvs_handle_t handle, const char *key, const void *value, size_t length) override {
+        return idf_nvs_.set_blob(handle, key, value, length);
+    }
+    esp_err_t hal_nvs_get_blob(nvs_handle_t handle, const char *key, void *out_value, size_t *length) override {
+        return idf_nvs_.get_blob(handle, key, out_value, length);
+    }
+    esp_err_t hal_nvs_commit(nvs_handle_t handle) override { return idf_nvs_.commit(handle); }
+
+private:
+    idf_hals::INvsHAL& idf_nvs_;
+};
+
+// Adapter to map idf_hals::ITimerHAL to smart_farm::ISmHalTimer
+class TimerAdapter : public smart_farm::ISmHalTimer {
+public:
+    explicit TimerAdapter(idf_hals::ITimerHAL& idf_timer) : idf_timer_(idf_timer) {}
+    int64_t get_time_us() const override { return idf_timer_.get_time_us(); }
+private:
+    idf_hals::ITimerHAL& idf_timer_;
+};
+
 
 // Production Configuration for XIAO-ESP32-C3 Mini Board
 static constexpr gpio_num_t POWER_GPIO = GPIO_NUM_10;        // D10
@@ -35,15 +72,16 @@ static constexpr gpio_num_t FLOAT_SWITCH_GPIO = GPIO_NUM_2;  // D0 need be D0-D3
 static constexpr gpio_num_t BATTERY_LEVEL_GPIO = GPIO_NUM_3; // D1
 static constexpr gpio_num_t BOOT_BUTTON_GPIO = GPIO_NUM_9;   // Boot button has no external pad
 
-// Static allocation for production hardware components
+// HAL instances for sharing across components
+static idf_hals::GpioHAL hal_gpio;
+static idf_hals::TimerHAL hal_timer;
+static idf_hals::SysRomHAL hal_sys_rom;
+static idf_hals::NvsHAL nvs_hal;
+
 // PowerControl
-static power_control::GpioHAL gpio_hal_pc;
-static power_control::PowerControl power{gpio_hal_pc, POWER_GPIO, /*inverted_logic=*/true, /*initial_on=*/false};
+static power_control::PowerControl power{hal_gpio, POWER_GPIO, /*inverted_logic=*/true, /*initial_on=*/false};
 
-// FloatSwitch
-static floatswitch::GpioHAL gpio_hal_fs;
-static floatswitch::TimerHAL timer_hal;
-
+// FloatSwitch config
 floatswitch::Config float_switch_config = {
     .gpio = FLOAT_SWITCH_GPIO,
     .normally_open = true,
@@ -51,12 +89,11 @@ floatswitch::Config float_switch_config = {
     .active_level = floatswitch::ActiveLevel::LOW,
     .wakeup_on = floatswitch::WakeupCondition::NEVER};
 
-static floatswitch::FloatSwitch float_switch{float_switch_config, gpio_hal_fs, timer_hal};
+static floatswitch::FloatSwitch float_switch{float_switch_config, hal_gpio, hal_timer, hal_sys_rom};
 
 // BatteryMonitor
-static battery_monitor::HalAdcOneshot oneshot_hal;
-static battery_monitor::HalAdcCalibration cali_hal;
-static battery_monitor::BmHalTimer timer_hal_bm;
+static idf_hals::HalAdcOneshot oneshot_hal;
+static idf_hals::HalAdcCalibration cali_hal;
 
 static battery_monitor::BatteryAdcConfig adc_config = {
     .gpio_num = static_cast<int>(BATTERY_LEVEL_GPIO),
@@ -68,7 +105,7 @@ static battery_monitor::BatteryMonitorConfig monitor_config = {
     .divider_top_ohms = 240000,
     .divider_bottom_ohms = 240000};
 
-static battery_monitor::AdcBatteryReader adc_reader{oneshot_hal, cali_hal, timer_hal_bm, adc_config};
+static battery_monitor::AdcBatteryReader adc_reader{oneshot_hal, cali_hal, hal_sys_rom, adc_config};
 static battery_monitor::BatteryMonitor bat_monitor{adc_reader, monitor_config};
 
 // Ultrasonic Sensor
@@ -87,11 +124,9 @@ static UltrasonicLevelSensorAdapter sensor_adapter{sensor_us};
 // SleepHAL
 static SleepHAL sleep_hw;
 
-// SmHalTimer
-static smart_farm::SmHalTimer sys_timer;
-
-// NVS
-static HalNvs hal_nvs;
+// Adapters for Application layer (nominally different interfaces)
+static TimerAdapter sys_timer{hal_timer};
+static NvsAdapter hal_nvs{nvs_hal};
 static WaterTankNvs nvs{hal_nvs};
 
 // StorageAdapter
