@@ -11,7 +11,7 @@
 class WaterTankNvs : public NvsCore
 {
 public:
-    WaterTankNvs(IHalNvs &hal);
+    WaterTankNvs(idf_hals::INvsHAL &hal);
     
     WaterTankStats stats;
 

@@ -10,7 +10,7 @@
 #include "water_tank_stats.hpp"
 #include "i_float_switch.hpp" // Adding component include
 #include "interfaces/i_battery_monitor.hpp"
-#include "interfaces/i_sm_hal_timer.hpp"
+#include "interfaces/i_hal_timer.hpp"
 
 /**
  * @class WaterTankApp
@@ -29,7 +29,7 @@ public:
         power_control::IPowerControl& power,
         ISleepHAL& sleep,
         battery_monitor::IBatteryMonitor& battery_monitor,
-        smart_farm::ISmHalTimer& sys_timer,
+        idf_hals::ITimerHAL& sys_timer,
         WaterTankLogic& logic);
 
     /**
@@ -46,7 +46,7 @@ private:
     power_control::IPowerControl& power_;
     ISleepHAL& sleep_;
     battery_monitor::IBatteryMonitor& battery_monitor_;
-    smart_farm::ISmHalTimer& sys_timer_;
+    idf_hals::ITimerHAL& sys_timer_;
     WaterTankLogic& logic_;
 
     WaterTankStats stats_;

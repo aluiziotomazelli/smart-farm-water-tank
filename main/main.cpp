@@ -1,7 +1,6 @@
 #include "esp_log.h"
 #include "espnow_manager.hpp"
 #include "float_switch.hpp"
-#include "hal_nvs_core.hpp"
 #include "hal_sleep.hpp"
 #include "power_control.hpp"
 #include "protocol_types.hpp"
@@ -15,8 +14,6 @@
 #include "ota_manager.hpp"
 #include "boot_button_ota_trigger.hpp"
 #include "ota_controller.hpp"
-#include "interfaces/i_sm_hal_timer.hpp"
-
 #include "wifi_manager.hpp"
 
 #include "battery_monitor.hpp"
@@ -29,40 +26,6 @@
 #include "hal_nvs.hpp"
 
 static const char* TAG = "main";
-
-// Adapter to map idf_hals::INvsHAL to IHalNvs required by nvs_core
-class NvsAdapter : public IHalNvs {
-public:
-    explicit NvsAdapter(idf_hals::INvsHAL& idf_nvs) : idf_nvs_(idf_nvs) {}
-
-    esp_err_t hal_nvs_flash_init() override { return idf_nvs_.flash_init(); }
-    esp_err_t hal_nvs_flash_erase() override { return idf_nvs_.flash_erase(); }
-    esp_err_t hal_nvs_erase_all(nvs_handle_t handle) override { return idf_nvs_.erase_all(handle); }
-    esp_err_t hal_nvs_open(const char *name, nvs_open_mode_t open_mode, nvs_handle_t *out_handle) override {
-        return idf_nvs_.open(name, open_mode, out_handle);
-    }
-    void hal_nvs_close(nvs_handle_t handle) override { idf_nvs_.close(handle); }
-    esp_err_t hal_nvs_set_blob(nvs_handle_t handle, const char *key, const void *value, size_t length) override {
-        return idf_nvs_.set_blob(handle, key, value, length);
-    }
-    esp_err_t hal_nvs_get_blob(nvs_handle_t handle, const char *key, void *out_value, size_t *length) override {
-        return idf_nvs_.get_blob(handle, key, out_value, length);
-    }
-    esp_err_t hal_nvs_commit(nvs_handle_t handle) override { return idf_nvs_.commit(handle); }
-
-private:
-    idf_hals::INvsHAL& idf_nvs_;
-};
-
-// Adapter to map idf_hals::ITimerHAL to smart_farm::ISmHalTimer
-class TimerAdapter : public smart_farm::ISmHalTimer {
-public:
-    explicit TimerAdapter(idf_hals::ITimerHAL& idf_timer) : idf_timer_(idf_timer) {}
-    int64_t get_time_us() const override { return idf_timer_.get_time_us(); }
-private:
-    idf_hals::ITimerHAL& idf_timer_;
-};
-
 
 // Production Configuration for XIAO-ESP32-C3 Mini Board
 static constexpr gpio_num_t POWER_GPIO = GPIO_NUM_10;        // D10
@@ -124,10 +87,8 @@ static UltrasonicLevelSensorAdapter sensor_adapter{sensor_us};
 // SleepHAL
 static SleepHAL sleep_hw;
 
-// Adapters for Application layer (nominally different interfaces)
-static TimerAdapter sys_timer{hal_timer};
-static NvsAdapter hal_nvs{nvs_hal};
-static WaterTankNvs nvs{hal_nvs};
+// Persistence and App instantiation
+static WaterTankNvs nvs{nvs_hal};
 
 // StorageAdapter
 static WaterTankStorageAdapter storage_adapter{nvs};
@@ -286,7 +247,7 @@ extern "C" void app_main()
         power,
         sleep_hw,
         bat_monitor,
-        sys_timer,
+        hal_timer,
         logic);
 
     // Run the main application flow

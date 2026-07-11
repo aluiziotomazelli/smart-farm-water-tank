@@ -4,7 +4,7 @@
 
 static const char *TAG = "WaterTankNvs";
 
-WaterTankNvs::WaterTankNvs(IHalNvs &hal)
+WaterTankNvs::WaterTankNvs(idf_hals::INvsHAL &hal)
     : NvsCore("water_tank", hal)
 {
 }

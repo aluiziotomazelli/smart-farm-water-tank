@@ -14,7 +14,7 @@ WaterTankApp::WaterTankApp(
     power_control::IPowerControl& power,
     ISleepHAL& sleep,
     battery_monitor::IBatteryMonitor& battery_monitor,
-    smart_farm::ISmHalTimer& sys_timer,
+    idf_hals::ITimerHAL& sys_timer,
     WaterTankLogic& logic)
     : sensor_(sensor)
     , float_switch_(float_switch)
