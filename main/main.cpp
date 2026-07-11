@@ -31,7 +31,7 @@ static const char* TAG = "main";
 static constexpr gpio_num_t POWER_GPIO = GPIO_NUM_10;        // D10
 static constexpr gpio_num_t US_TRIG_GPIO = GPIO_NUM_4;       // D2
 static constexpr gpio_num_t US_ECHO_GPIO = GPIO_NUM_5;       // D3
-static constexpr gpio_num_t FLOAT_SWITCH_GPIO = GPIO_NUM_7;  // D5
+static constexpr gpio_num_t FLOAT_SWITCH_GPIO = GPIO_NUM_2;  // D0 need be D0-D3 GPIO 3-5 to enable deep-sleep wake-up
 static constexpr gpio_num_t BATTERY_LEVEL_GPIO = GPIO_NUM_3; // D1
 static constexpr gpio_num_t BOOT_BUTTON_GPIO = GPIO_NUM_9;   // Boot button has no external pad
 
@@ -49,7 +49,7 @@ floatswitch::Config float_switch_config = {
     .normally_open = true,
     .debounce_time_us = 50000,
     .active_level = floatswitch::ActiveLevel::LOW,
-    .wakeup_on = floatswitch::WakeupCondition::WHEN_TANK_IS_EMPTY};
+    .wakeup_on = floatswitch::WakeupCondition::NEVER};
 
 static floatswitch::FloatSwitch float_switch{float_switch_config, gpio_hal_fs, timer_hal};
 
@@ -62,13 +62,11 @@ static battery_monitor::BatteryAdcConfig adc_config = {
     .gpio_num = static_cast<int>(BATTERY_LEVEL_GPIO),
     .sample_count = 16,
     .sample_delay_us = 1000,
-    .enable_calibration = true
-};
+    .enable_calibration = true};
 
 static battery_monitor::BatteryMonitorConfig monitor_config = {
     .divider_top_ohms = 240000,
-    .divider_bottom_ohms = 240000
-};
+    .divider_bottom_ohms = 240000};
 
 static battery_monitor::AdcBatteryReader adc_reader{oneshot_hal, cali_hal, timer_hal_bm, adc_config};
 static battery_monitor::BatteryMonitor bat_monitor{adc_reader, monitor_config};
@@ -244,7 +242,17 @@ extern "C" void app_main()
     }
 
     // Instantiate app with dependencies
-    WaterTankApp app(sensor_adapter, float_switch, storage_adapter, espnow, app_rx_queue, power, sleep_hw, bat_monitor, sys_timer, logic);
+    WaterTankApp app(
+        sensor_adapter,
+        float_switch,
+        storage_adapter,
+        espnow,
+        app_rx_queue,
+        power,
+        sleep_hw,
+        bat_monitor,
+        sys_timer,
+        logic);
 
     // Run the main application flow
     app.run();

@@ -10,28 +10,24 @@ To prevent this, configure the `FloatSwitch` in `water_tank_app.cpp` so that an 
 
 ### Recommended Configuration
 
-Update the `ProductionStack` in `app_water_tank/main/src/water_tank_app.cpp`:
+Update the `float_switch_config` in `smart-farm-water-tank/main/main.cpp`:
 
 ```cpp
-// Change ActiveLevel to HIGH so that the internal pull-up (HIGH) 
-// is interpreted as "Tank Full".
-floatswitch::FloatSwitch fs{
-    {FLOAT_SWITCH_GPIO,
-     true,                            // enable_internal_pullup
-     50000,                           // debounce_us
-     floatswitch::ActiveLevel::HIGH,  // interpreting pull-up as FULL
-     floatswitch::WakeupCondition::NEVER}, // disable pin wakeup
-    gpio_hal_fs,
-    timer_hal};
+floatswitch::Config float_switch_config = {
+    .gpio = FLOAT_SWITCH_GPIO,
+    .normally_open = true, // Open contact = Tank Full
+    .debounce_time_us = 50000,
+    .active_level = floatswitch::ActiveLevel::LOW, // internal pull-up will be enabled naturally yielding an open contact
+    .wakeup_on = floatswitch::WakeupCondition::NEVER}; // Disable pin wakeup to prevent noise from waking the device
 ```
 
 ## 2. Summary of Configuration Values
 
 | Parameter | Recommended Value | Reason |
 | :--- | :--- | :--- |
-| `enable_internal_pullup` | `true` | Keeps the pin at a stable HIGH state when disconnected. |
-| `active_level` | `HIGH` | Matches the pull-up state to signal "Full" and save battery. |
-| `wakeup_condition` | `NEVER` | Prevents the open pin from causing accidental wakeups from noise. |
+| `normally_open` | `true` | Ensures that an open/disconnected circuit is interpreted as "Full". |
+| `active_level` | `LOW` | Automatically enables the internal pull-up resistor. When the pin is disconnected, it stays HIGH, resulting in an "open" reading. |
+| `wakeup_on` | `NEVER` | Prevents the disconnected pin from causing accidental wakeups from electrical noise. |
 
 ## 3. Telemetry Impact
 
