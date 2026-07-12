@@ -131,7 +131,7 @@ static OtaConfig ota_config{
 static OtaManager ota_manager(ota_deps);
 
 // OTA triggers: boot button + espnow
-static ButtonOtaTrigger btn_trigger(hal_gpio, hal_freertos, BOOT_BUTTON_GPIO, 3000);
+static ButtonOtaTrigger btn_trigger(hal_gpio, hal_freertos, BOOT_BUTTON_GPIO, 200);
 static EspNowOtaTrigger espnow_ota_trigger;
 
 // OTA Controller config
@@ -139,8 +139,7 @@ static OtaControllerConfig ota_ctrl_config{
     .wifi_connect_timeout_ms = 30000,
     .ota_watchdog_timeout_ms = 120000,
     .task_stack_size = 4096,
-    .task_priority = 5
-};
+    .task_priority = 5};
 
 // Setup Hardware
 static QueueHandle_t app_rx_queue = nullptr;
