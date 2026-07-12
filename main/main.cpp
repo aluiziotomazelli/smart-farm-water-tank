@@ -180,7 +180,7 @@ static esp_err_t setup_hardware()
     espnow::EspNowConfig config;
     config.node_id = static_cast<espnow::NodeId>(FarmNodeId::WATER_TANK);
     config.node_type = static_cast<espnow::NodeType>(FarmNodeType::SENSOR);
-    app_rx_queue = xQueueCreate(30, sizeof(espnow::AppMessage));
+    app_rx_queue = hal_freertos.queue_create(30, sizeof(espnow::AppMessage));
     config.app_rx_queue = app_rx_queue;
     config.wifi_channel = 1;
 
@@ -254,6 +254,7 @@ extern "C" void app_main()
         sleep_hw,
         bat_monitor,
         hal_timer,
+        hal_freertos,
         logic,
         espnow_ota_trigger,
         ota_controller);

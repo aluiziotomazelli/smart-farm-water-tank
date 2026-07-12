@@ -42,7 +42,7 @@ protected:
     WaterTankLogic logic{geometry, mock_float_switch};
     QueueHandle_t dummy_queue = nullptr;
     
-    WaterTankApp app{mock_sensor, mock_float_switch, mock_storage, mock_comm, dummy_queue, mock_power, mock_sleep, mock_battery, mock_sys_timer, logic, espnow_ota_trigger, ota_controller};
+    WaterTankApp app{mock_sensor, mock_float_switch, mock_storage, mock_comm, dummy_queue, mock_power, mock_sleep, mock_battery, mock_sys_timer, mock_rtos, logic, espnow_ota_trigger, ota_controller};
 
     void SetUp() override {
         // Default behaviors

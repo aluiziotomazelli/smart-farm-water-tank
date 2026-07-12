@@ -11,6 +11,7 @@
 #include "i_float_switch.hpp" // Adding component include
 #include "interfaces/i_battery_monitor.hpp"
 #include "interfaces/i_hal_timer.hpp"
+#include "interfaces/i_hal_freertos.hpp"
 #include "espnow_ota_trigger.hpp"
 #include "ota_controller.hpp"
 
@@ -32,6 +33,7 @@ public:
         idf_hals::ISleepHAL& sleep,
         battery_monitor::IBatteryMonitor& battery_monitor,
         idf_hals::ITimerHAL& sys_timer,
+        idf_hals::IHalFreertos& rtos,
         WaterTankLogic& logic,
         EspNowOtaTrigger& espnow_ota_trigger,
         OtaController& ota_controller);
@@ -51,6 +53,7 @@ private:
     idf_hals::ISleepHAL& sleep_;
     battery_monitor::IBatteryMonitor& battery_monitor_;
     idf_hals::ITimerHAL& sys_timer_;
+    idf_hals::IHalFreertos& rtos_;
     WaterTankLogic& logic_;
     EspNowOtaTrigger& espnow_ota_trigger_;
     OtaController& ota_controller_;

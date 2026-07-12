@@ -15,6 +15,7 @@ WaterTankApp::WaterTankApp(
     idf_hals::ISleepHAL& sleep,
     battery_monitor::IBatteryMonitor& battery_monitor,
     idf_hals::ITimerHAL& sys_timer,
+    idf_hals::IHalFreertos& rtos,
     WaterTankLogic& logic,
     EspNowOtaTrigger& espnow_ota_trigger,
     OtaController& ota_controller)
@@ -27,6 +28,7 @@ WaterTankApp::WaterTankApp(
     , sleep_(sleep)
     , battery_monitor_(battery_monitor)
     , sys_timer_(sys_timer)
+    , rtos_(rtos)
     , logic_(logic)
     , espnow_ota_trigger_(espnow_ota_trigger)
     , ota_controller_(ota_controller)
@@ -148,7 +150,7 @@ void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
     if (ota_controller_.is_busy()) {
         ESP_LOGW(TAG, "OTA in progress, waiting for completion before sleeping...");
         while (ota_controller_.is_busy()) {
-            vTaskDelay(pdMS_TO_TICKS(1000));
+            rtos_.task_delay(pdMS_TO_TICKS(1000));
         }
         ESP_LOGI(TAG, "OTA finished (failed/cancelled). Proceeding to deep sleep.");
     }
@@ -181,7 +183,7 @@ void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
 void WaterTankApp::listen_for_commands(uint32_t timeout_ms)
 {
     if (!rx_queue_) {
-        vTaskDelay(pdMS_TO_TICKS(timeout_ms));
+        rtos_.task_delay(pdMS_TO_TICKS(timeout_ms));
         return;
     }
 
@@ -192,7 +194,7 @@ void WaterTankApp::listen_for_commands(uint32_t timeout_ms)
         int64_t remaining = deadline_ms - (sys_timer_.get_time_us() / 1000);
         if (remaining <= 0) break;
         
-        if (xQueueReceive(rx_queue_, &msg, pdMS_TO_TICKS(remaining)) == pdTRUE) {
+        if (rtos_.queue_receive(rx_queue_, &msg, pdMS_TO_TICKS(remaining)) == pdPASS) {
             if (msg.msg_type == espnow::MessageType::COMMAND) {
                 auto cmd = static_cast<espnow::CommandType>(msg.payload_type);
                 if (cmd == espnow::CommandType::START_OTA) {
