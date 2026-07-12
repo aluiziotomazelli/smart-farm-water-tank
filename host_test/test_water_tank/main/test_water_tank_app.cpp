@@ -11,7 +11,7 @@
 #include "mock_hal_sleep.hpp"
 #include "mock_i_battery_monitor.hpp"
 #include "tank_geometry.hpp"
-#include "mock_i_sm_hal_timer.hpp"
+#include "mock_hal_timer.hpp"
 
 using ::testing::_;
 using ::testing::Return;
@@ -26,9 +26,9 @@ protected:
     testing::NiceMock<espnow::MockEspNowManager> mock_comm;
     testing::NiceMock<wifi_manager::MockWiFiManager> mock_wifi;
     testing::NiceMock<power_control::MockPowerControl> mock_power;
-    testing::NiceMock<MockSleepHAL> mock_sleep;
+    testing::NiceMock<idf_hals::MockSleepHAL> mock_sleep;
     testing::NiceMock<battery_monitor::MockBatteryMonitor> mock_battery;
-    testing::NiceMock<smart_farm::MockSmHalTimer> mock_sys_timer;
+    testing::NiceMock<idf_hals::MockTimerHAL> mock_sys_timer;
     
     TankGeometry geometry{10}; // offset 10cm (uint8_t)
     WaterTankLogic logic{geometry, mock_float_switch};

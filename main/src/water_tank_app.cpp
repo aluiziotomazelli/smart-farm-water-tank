@@ -12,7 +12,7 @@ WaterTankApp::WaterTankApp(
     espnow::IEspNowManager& comm,
     QueueHandle_t rx_queue,
     power_control::IPowerControl& power,
-    ISleepHAL& sleep,
+    idf_hals::ISleepHAL& sleep,
     battery_monitor::IBatteryMonitor& battery_monitor,
     idf_hals::ITimerHAL& sys_timer,
     WaterTankLogic& logic)
@@ -150,7 +150,9 @@ void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
         int gpio_num;
         bool wake_high;
         if (float_switch_.get_wakeup_config(gpio_num, wake_high) == ESP_OK) {
-            if (sleep_.enable_gpio_wakeup(gpio_num, wake_high) == ESP_OK) {
+            uint64_t pin_mask = 1ULL << gpio_num;
+            esp_deepsleep_gpio_wake_up_mode_t mode = wake_high ? ESP_GPIO_WAKEUP_GPIO_HIGH : ESP_GPIO_WAKEUP_GPIO_LOW;
+            if (sleep_.deep_sleep_enable_gpio_wakeup(pin_mask, mode) == ESP_OK) {
                 stats_.gpio_wakeup_enabled = true;
                 ESP_LOGI(TAG, "GPIO wakeup enabled on pin %d (wake_on_high=%d)", gpio_num, wake_high);
             }

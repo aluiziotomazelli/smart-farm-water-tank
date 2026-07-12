@@ -19,6 +19,7 @@ idf_component_register(
         "../../../components/battery_monitor/include"
         "../../../components/battery_monitor/include/interfaces"
         "../../../components/smart-farm-common/host_test/common"
+        "../../../components/idf_hals/mocks"
     REQUIRES 
         gtest
         common
@@ -28,6 +29,7 @@ idf_component_register(
         power_control
         nvs_core
         battery_monitor
+        idf_hals
         WHOLE_ARCHIVE
 )
 

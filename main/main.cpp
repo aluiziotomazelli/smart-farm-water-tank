@@ -85,7 +85,7 @@ static ultrasonic::UsSensor sensor_us{US_TRIG_GPIO, US_ECHO_GPIO, us_config};
 static UltrasonicLevelSensorAdapter sensor_adapter{sensor_us};
 
 // SleepHAL
-static SleepHAL sleep_hw;
+static idf_hals::SleepHAL sleep_hw;
 
 // Persistence and App instantiation
 static WaterTankNvs nvs{nvs_hal};

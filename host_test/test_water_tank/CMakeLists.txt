@@ -10,6 +10,7 @@ list(APPEND EXTRA_COMPONENT_DIRS
     "../../components/espnow_manager"
     "../../components/wifi_manager"
     "../../components/battery_monitor"
+    "../../components/idf_hals"
     "../common"
     "../gtest"
     
@@ -29,6 +30,7 @@ set(COMPONENTS
     "espnow_manager"
     "power_control"
     "battery_monitor"
+    "idf_hals"
 )
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)

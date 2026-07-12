@@ -27,7 +27,7 @@ public:
         espnow::IEspNowManager& comm,
         QueueHandle_t rx_queue,
         power_control::IPowerControl& power,
-        ISleepHAL& sleep,
+        idf_hals::ISleepHAL& sleep,
         battery_monitor::IBatteryMonitor& battery_monitor,
         idf_hals::ITimerHAL& sys_timer,
         WaterTankLogic& logic);
@@ -44,7 +44,7 @@ private:
     espnow::IEspNowManager& comm_;
     QueueHandle_t rx_queue_;
     power_control::IPowerControl& power_;
-    ISleepHAL& sleep_;
+    idf_hals::ISleepHAL& sleep_;
     battery_monitor::IBatteryMonitor& battery_monitor_;
     idf_hals::ITimerHAL& sys_timer_;
     WaterTankLogic& logic_;
