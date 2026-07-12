@@ -22,6 +22,13 @@ protected:
     OtaControllerConfig config;
     OtaController controller{mock_wifi, mock_ota, mock_rtos, config};
 
+    SemaphoreHandle_t dummy_sem = reinterpret_cast<SemaphoreHandle_t>(0x5555);
+
+    void SetUp() override {
+        ON_CALL(mock_rtos, semaphore_create_binary()).WillByDefault(Return(dummy_sem));
+        ON_CALL(mock_rtos, semaphore_take(dummy_sem, _)).WillByDefault(Return(pdTRUE));
+    }
+
     // Helper methods to access private members of OtaController
     void set_state(OtaController::State state) {
         controller.state_ = state;
@@ -46,6 +53,9 @@ protected:
     }
     TaskHandle_t get_task() const {
         return controller.task_;
+    }
+    void set_task_done_semaphore(SemaphoreHandle_t sem) {
+        controller.task_done_semaphore_ = sem;
     }
     void run_fsm() {
         controller.run_fsm();
@@ -177,6 +187,7 @@ TEST_F(OtaControllerTest, StartArmsTriggersAndCreatesTask)
 
     EXPECT_CALL(mock_trigger1, arm(testing::Ref(controller))).Times(1);
     EXPECT_CALL(mock_trigger2, arm(testing::Ref(controller))).Times(1);
+    EXPECT_CALL(mock_rtos, semaphore_create_binary()).WillOnce(Return(dummy_sem));
     EXPECT_CALL(mock_rtos, task_create(_, _, _, _, _, _)).WillOnce(Return(pdPASS));
 
     esp_err_t err = controller.start(triggers);
@@ -186,17 +197,87 @@ TEST_F(OtaControllerTest, StartArmsTriggersAndCreatesTask)
     controller.stop();
 }
 
-TEST_F(OtaControllerTest, StopDisarmsTriggersAndDeleteTask)
+TEST_F(OtaControllerTest, StopDisarmsTriggersAndForcesDeleteOnTimeout)
 {
     MockOtaTrigger mock_trigger1;
     std::vector<IOtaTrigger*> triggers = {&mock_trigger1};
     set_triggers(triggers);
     set_task(reinterpret_cast<TaskHandle_t>(0x1234));
+    set_task_done_semaphore(dummy_sem);
 
+    // Force semaphore_take to fail (simulating timeout)
+    EXPECT_CALL(mock_rtos, semaphore_take(dummy_sem, _)).WillOnce(Return(pdFALSE));
     EXPECT_CALL(mock_trigger1, disarm()).Times(1);
     EXPECT_CALL(mock_rtos, task_delete(reinterpret_cast<TaskHandle_t>(0x1234))).Times(1);
+    EXPECT_CALL(mock_rtos, semaphore_delete(dummy_sem)).Times(1);
 
     controller.stop();
     EXPECT_EQ(get_task(), nullptr);
     EXPECT_TRUE(get_triggers().empty());
+}
+
+TEST_F(OtaControllerTest, StopTaskExitsCleanlyWithoutForceDelete)
+{
+    MockOtaTrigger mock_trigger1;
+    std::vector<IOtaTrigger*> triggers = {&mock_trigger1};
+    set_triggers(triggers);
+    set_task(reinterpret_cast<TaskHandle_t>(0x1234));
+    set_task_done_semaphore(dummy_sem);
+
+    // Simulate clean exit by returning pdTRUE
+    EXPECT_CALL(mock_rtos, semaphore_take(dummy_sem, _)).WillOnce(Return(pdTRUE));
+    EXPECT_CALL(mock_trigger1, disarm()).Times(1);
+    EXPECT_CALL(mock_rtos, task_delete(_)).Times(0);
+    EXPECT_CALL(mock_rtos, semaphore_delete(dummy_sem)).Times(1);
+
+    controller.stop();
+    EXPECT_EQ(get_task(), nullptr);
+    EXPECT_TRUE(get_triggers().empty());
+}
+
+TEST_F(OtaControllerTest, StopDuringOtaRunningCancelsOta)
+{
+    set_state(OtaController::State::OTA_RUNNING);
+
+    EXPECT_CALL(mock_ota, start_ota()).WillOnce(Return(true));
+    EXPECT_CALL(mock_ota, get_status())
+        .WillOnce(Return(OtaStatus::DOWNLOADING))
+        .WillOnce(Return(OtaStatus::FAILED));
+
+    // Espiar notificacoes
+    EXPECT_CALL(mock_rtos, task_notify_wait(0, _, _, 0))
+        .WillOnce(testing::DoAll(
+            testing::SetArgPointee<2>(static_cast<uint32_t>(1 << 1)), // NOTIFY_TASK_TO_STOP
+            Return(pdTRUE)
+        ));
+
+    EXPECT_CALL(mock_ota, cancel_ota()).Times(1);
+
+    run_fsm();
+
+    EXPECT_EQ(get_state(), OtaController::State::OTA_FAILED);
+}
+
+TEST_F(OtaControllerTest, OtaTriggerIgnoredIfBusy)
+{
+    set_state(OtaController::State::OTA_RUNNING);
+
+    // When busy, it should ignore the trigger and NOT notify the task
+    EXPECT_CALL(mock_rtos, task_notify(_, _, _)).Times(0);
+
+    controller.on_ota_triggered(OtaTriggerSource::BUTTON);
+}
+
+TEST_F(OtaControllerTest, OtaTriggerNotifiesTaskIfNotBusy)
+{
+    set_state(OtaController::State::IDLE);
+    set_task(reinterpret_cast<TaskHandle_t>(0x1234));
+
+    // When not busy, it should notify the task using eSetBits and NOTIFY_OTA_TRIGGER
+    EXPECT_CALL(mock_rtos, task_notify(reinterpret_cast<TaskHandle_t>(0x1234), static_cast<uint32_t>(1 << 0), eSetBits)).Times(1);
+
+    controller.on_ota_triggered(OtaTriggerSource::BUTTON);
+
+    // Clean task to prevent destructor from trying to stop the fake task
+    set_task(nullptr);
 }
