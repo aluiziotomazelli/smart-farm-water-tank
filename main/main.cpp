@@ -12,7 +12,8 @@
 #include "water_tank_storage_adapter.hpp"
 #include "secrets.hpp"
 #include "ota_manager.hpp"
-#include "boot_button_ota_trigger.hpp"
+#include "button_ota_trigger.hpp"
+#include "espnow_ota_trigger.hpp"
 #include "ota_controller.hpp"
 #include "wifi_manager.hpp"
 
@@ -24,6 +25,7 @@
 #include "hal_gpio.hpp"
 #include "hal_timer.hpp"
 #include "hal_nvs.hpp"
+#include "hal_freertos.hpp"
 
 static const char* TAG = "main";
 
@@ -40,6 +42,7 @@ static idf_hals::GpioHAL hal_gpio;
 static idf_hals::TimerHAL hal_timer;
 static idf_hals::SysRomHAL hal_sys_rom;
 static idf_hals::NvsHAL nvs_hal;
+static idf_hals::HalFreertos hal_freertos;
 
 // PowerControl
 static power_control::PowerControl power{hal_gpio, POWER_GPIO, /*inverted_logic=*/true, /*initial_on=*/false};
@@ -127,14 +130,16 @@ static OtaConfig ota_config{
 };
 static OtaManager ota_manager(ota_deps);
 
-// OTA trigger: button BOOT (GPIO 9 no XIAO-ESP32-C3)
-static BootButtonOtaTrigger ota_trigger(BOOT_BUTTON_GPIO);
+// OTA triggers: boot button + espnow
+static ButtonOtaTrigger btn_trigger(hal_gpio, hal_freertos, BOOT_BUTTON_GPIO, 3000);
+static EspNowOtaTrigger espnow_ota_trigger;
 
 // OTA Controller config
 static OtaControllerConfig ota_ctrl_config{
     .wifi_connect_timeout_ms = 30000,
-    .trigger_poll_interval_ms = 100,
-    .trigger_timeout_ms = 5000, // window of 10s to press the button
+    .ota_watchdog_timeout_ms = 120000,
+    .task_stack_size = 4096,
+    .task_priority = 5
 };
 
 // Setup Hardware
@@ -204,12 +209,6 @@ static esp_err_t setup_hardware()
         return ESP_FAIL;
     }
 
-    // OTA Trigger
-    if ((err = ota_trigger.init()) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize OTA Trigger: %s", esp_err_to_name(err));
-        return err;
-    }
-
     return ESP_OK;
 }
 
@@ -227,15 +226,22 @@ extern "C" void app_main()
     // Retrieve singleton references for DI
     auto& wifi = wifi_manager::WiFiManager::get_instance();
     auto& espnow = espnow::EspNowManager::instance();
-    OtaController ota_controller(ota_manager, wifi, ota_trigger, ota_ctrl_config);
 
     // Verify rollback state on boot
-    ota_controller.handle_pending_verify();
-
-    // OTA window: press button to trigger update
-    if (ota_controller.wait_and_run() != ESP_OK) {
-        ESP_LOGW(TAG, "OTA window expired. Proceeding with normal boot.");
+    if (ota_manager.check_pending_verify()) {
+        ESP_LOGI(TAG, "New firmware pending verification. Confirming as valid.");
+        if (ota_manager.confirm_app_valid()) {
+            ESP_LOGI(TAG, "Firmware confirmed successfully.");
+        }
+        else {
+            ESP_LOGE(TAG, "Failed to confirm firmware. Triggering rollback.");
+            ota_manager.rollback_and_reboot();
+        }
     }
+
+    // Instantiate and start non-blocking OtaController
+    static OtaController ota_controller(wifi, ota_manager, hal_freertos, ota_ctrl_config);
+    ota_controller.start({&btn_trigger, &espnow_ota_trigger});
 
     // Instantiate app with dependencies
     WaterTankApp app(
@@ -248,7 +254,9 @@ extern "C" void app_main()
         sleep_hw,
         bat_monitor,
         hal_timer,
-        logic);
+        logic,
+        espnow_ota_trigger,
+        ota_controller);
 
     // Run the main application flow
     app.run();

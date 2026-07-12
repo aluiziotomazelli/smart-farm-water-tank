@@ -11,6 +11,7 @@ list(APPEND EXTRA_COMPONENT_DIRS
     "../../components/wifi_manager"
     "../../components/battery_monitor"
     "../../components/idf_hals"
+    "../../components/ota_manager"
     "../common"
     "../gtest"
     
@@ -31,6 +32,9 @@ set(COMPONENTS
     "power_control"
     "battery_monitor"
     "idf_hals"
+    "ota_manager"
+    "wifi_manager"
+    "esp_timer"
 )
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)

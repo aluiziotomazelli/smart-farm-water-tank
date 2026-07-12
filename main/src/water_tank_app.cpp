@@ -15,7 +15,9 @@ WaterTankApp::WaterTankApp(
     idf_hals::ISleepHAL& sleep,
     battery_monitor::IBatteryMonitor& battery_monitor,
     idf_hals::ITimerHAL& sys_timer,
-    WaterTankLogic& logic)
+    WaterTankLogic& logic,
+    EspNowOtaTrigger& espnow_ota_trigger,
+    OtaController& ota_controller)
     : sensor_(sensor)
     , float_switch_(float_switch)
     , storage_(storage)
@@ -26,6 +28,8 @@ WaterTankApp::WaterTankApp(
     , battery_monitor_(battery_monitor)
     , sys_timer_(sys_timer)
     , logic_(logic)
+    , espnow_ota_trigger_(espnow_ota_trigger)
+    , ota_controller_(ota_controller)
 {
 }
 
@@ -141,6 +145,14 @@ SensorStatus WaterTankApp::map_status(ultrasonic::UsResult result)
 
 void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
 {
+    if (ota_controller_.is_busy()) {
+        ESP_LOGW(TAG, "OTA in progress, waiting for completion before sleeping...");
+        while (ota_controller_.is_busy()) {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+        ESP_LOGI(TAG, "OTA finished (failed/cancelled). Proceeding to deep sleep.");
+    }
+
     ESP_LOGI(TAG, "Entering deep sleep for %llu s", sleep_time_us / 1000000);
 
     sleep_.disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
@@ -185,8 +197,7 @@ void WaterTankApp::listen_for_commands(uint32_t timeout_ms)
                 auto cmd = static_cast<espnow::CommandType>(msg.payload_type);
                 if (cmd == espnow::CommandType::START_OTA) {
                     ESP_LOGW(TAG, "Received START_OTA command from Hub - triggering OTA");
-                    // OtaController will be wired here later
-                    ESP_LOGW(TAG, "OTA trigger not yet wired - future implementation.");
+                    espnow_ota_trigger_.notify();
                 }
             }
         }

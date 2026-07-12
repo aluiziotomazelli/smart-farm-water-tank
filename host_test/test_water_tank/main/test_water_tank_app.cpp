@@ -12,6 +12,10 @@
 #include "mock_i_battery_monitor.hpp"
 #include "tank_geometry.hpp"
 #include "mock_hal_timer.hpp"
+#include "mock_i_ota_manager.hpp"
+#include "mock_hal_freertos.hpp"
+#include "espnow_ota_trigger.hpp"
+#include "ota_controller.hpp"
 
 using ::testing::_;
 using ::testing::Return;
@@ -29,12 +33,16 @@ protected:
     testing::NiceMock<idf_hals::MockSleepHAL> mock_sleep;
     testing::NiceMock<battery_monitor::MockBatteryMonitor> mock_battery;
     testing::NiceMock<idf_hals::MockTimerHAL> mock_sys_timer;
+    testing::NiceMock<MockOtaManager> mock_ota;
+    testing::NiceMock<idf_hals::MockHalFreertos> mock_rtos;
+    EspNowOtaTrigger espnow_ota_trigger;
+    OtaController ota_controller{mock_wifi, mock_ota, mock_rtos};
     
     TankGeometry geometry{10}; // offset 10cm (uint8_t)
     WaterTankLogic logic{geometry, mock_float_switch};
     QueueHandle_t dummy_queue = nullptr;
     
-    WaterTankApp app{mock_sensor, mock_float_switch, mock_storage, mock_comm, dummy_queue, mock_power, mock_sleep, mock_battery, mock_sys_timer, logic};
+    WaterTankApp app{mock_sensor, mock_float_switch, mock_storage, mock_comm, dummy_queue, mock_power, mock_sleep, mock_battery, mock_sys_timer, logic, espnow_ota_trigger, ota_controller};
 
     void SetUp() override {
         // Default behaviors

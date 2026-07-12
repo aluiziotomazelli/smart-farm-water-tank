@@ -6,7 +6,7 @@
 class MockOtaManager : public IOtaManager {
 public:
     MOCK_METHOD(bool, init, (const OtaConfig& config), (override));
-    MOCK_METHOD(void, deinit, (), (override));
+    MOCK_METHOD(bool, deinit, (), (override));
     MOCK_METHOD(bool, start_ota, (), (override));
     MOCK_METHOD(void, cancel_ota, (), (override));
     MOCK_METHOD(OtaStatus, get_status, (), (const, override));

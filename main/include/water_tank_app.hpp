@@ -11,6 +11,8 @@
 #include "i_float_switch.hpp" // Adding component include
 #include "interfaces/i_battery_monitor.hpp"
 #include "interfaces/i_hal_timer.hpp"
+#include "espnow_ota_trigger.hpp"
+#include "ota_controller.hpp"
 
 /**
  * @class WaterTankApp
@@ -30,7 +32,9 @@ public:
         idf_hals::ISleepHAL& sleep,
         battery_monitor::IBatteryMonitor& battery_monitor,
         idf_hals::ITimerHAL& sys_timer,
-        WaterTankLogic& logic);
+        WaterTankLogic& logic,
+        EspNowOtaTrigger& espnow_ota_trigger,
+        OtaController& ota_controller);
 
     /**
      * @brief Execute the main application loop.
@@ -48,6 +52,8 @@ private:
     battery_monitor::IBatteryMonitor& battery_monitor_;
     idf_hals::ITimerHAL& sys_timer_;
     WaterTankLogic& logic_;
+    EspNowOtaTrigger& espnow_ota_trigger_;
+    OtaController& ota_controller_;
 
     WaterTankStats stats_;
 
