@@ -13,10 +13,11 @@ static constexpr uint8_t SENSOR_OFFSET_CM = 27; ///< Offset of the sensor from t
 static constexpr float SENSOR_MIN_DISTANCE_CM = 15.0f;  ///< Minimum distance for sensor valid measure
 static constexpr float SENSOR_MAX_DISTANCE_CM = 200.0f; ///< Maximum distance for sensor valid measure
 
-static constexpr uint16_t BATTERY_EMPTY_MV = 3000;       ///< Voltage threshold representing 0% battery (millivolts)
-static constexpr uint16_t BATTERY_FULL_MV = 4200;        ///< Voltage threshold representing 100% battery (millivolts)
-static constexpr uint16_t BATTERY_LOW_MV = 3400;         ///< Voltage threshold representing low battery level (millivolts)
-static constexpr uint16_t BATTERY_CRITICAL_MV = 3200;    ///< Voltage threshold representing critical battery level (millivolts)
+static constexpr uint16_t BATTERY_EMPTY_MV = 3000; ///< Voltage threshold representing 0% battery (millivolts)
+static constexpr uint16_t BATTERY_FULL_MV = 4200;  ///< Voltage threshold representing 100% battery (millivolts)
+static constexpr uint16_t BATTERY_LOW_MV = 3400;   ///< Voltage threshold representing low battery level (millivolts)
+static constexpr uint16_t BATTERY_CRITICAL_MV =
+    3200; ///< Voltage threshold representing critical battery level (millivolts)
 
 static constexpr uint16_t LEVEL_DELTA_MIN = 5; ///< Minimum level change to detect (5 ppm)
 
@@ -25,7 +26,8 @@ static constexpr uint64_t TIMER_STABLE_US = 5ULL * 60ULL * 1000000ULL; ///< Time
 static constexpr uint64_t TIMER_DRAIN_US = 2ULL * 60ULL * 1000000ULL;  ///< Time to sleep when tank is draining (2 min)
 static constexpr uint64_t TIMER_UNKNOWN_US = 60ULL * 1000000ULL; ///< Time to sleep when tank state is unknown (60 s)
 
-static constexpr uint32_t LISTEN_WINDOW_MS = 2000; ///< Listen window for commands before sleep
+// 200ms covers hub processing (10-20ms) and ESP-NOW hardware retries safely
+static constexpr uint32_t LISTEN_WINDOW_MS = 200;
 
 static constexpr float WEAK_SLEEP_FACTOR = 0.5f;     ///< Factor to reduce sleep time when sensor reading is weak
 static constexpr float INVALID_SLEEP_FACTOR = 0.25f; ///< Factor to reduce sleep time when sensor reading is invalid
