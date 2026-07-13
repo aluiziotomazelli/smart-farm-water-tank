@@ -3,6 +3,9 @@
 #include "esp_sleep.h"
 #include "farm_protocol_types.hpp"
 
+static constexpr uint32_t RUN_LOOP_DELAY_MS = 5000;
+static constexpr uint32_t SENSOR_WARMUP_MS = 600;
+
 static const char* TAG = "WaterTankApp";
 
 WaterTankApp::WaterTankApp(
@@ -37,56 +40,70 @@ WaterTankApp::WaterTankApp(
 
 void WaterTankApp::run()
 {
-    ESP_LOGI(TAG, "Starting application flow");
+    while (true) {
+        ESP_LOGI(TAG, "Starting application flow");
 
-    // 1. Load state and statistics from persistent storage
-    if (storage_.load(stats_) != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to load storage, using defaults");
-        storage_.reset_to_defaults(stats_);
-    }
+        // Power on sensor and wait for warmup
+        power_.turn_on();
+        rtos_.task_delay(pdMS_TO_TICKS(SENSOR_WARMUP_MS));
 
-    // 2. Perform sensor reading
-    ultrasonic::Reading reading = sensor_.read_level();
-    ESP_LOGI(TAG, "Reading raw: %.1f cm (Status: %d)", reading.cm, static_cast<int>(reading.result));
-
-    // Turn off sensor power as soon as we have the reading
-    power_.turn_off();
-
-    // 3. Process logic (Brain)
-    logic_.process_reading(reading, stats_);
-    logic_.update_operation_mode(stats_);
-
-    ESP_LOGI(
-        TAG,
-        "Result: %d, Distance: %.1f cm, Level: %d permille, Mode: %s",
-        static_cast<int>(stats_.last_result),
-        stats_.last_distance_cm,
-        stats_.level_permille,
-        stats_.backup_mode_active ? "BACKUP" : "NORMAL");
-
-    // 4. Save updated state
-    storage_.save(stats_);
-
-    // 5. Read battery status
-    if (battery_monitor_.init() == ESP_OK) {
-        battery_monitor::BatteryReading bat_reading;
-        if (battery_monitor_.read(bat_reading) == ESP_OK) {
-            logic_.process_battery(bat_reading.voltage_mv, stats_);
-            ESP_LOGI(TAG, "Battery: %d mV (%d%%), state: %d", 
-                     stats_.last_battery_mv, stats_.last_battery_percent, static_cast<int>(stats_.last_battery_state));
+        // 1. Load state and statistics from persistent storage
+        if (storage_.load(stats_) != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to load storage, using defaults");
+            storage_.reset_to_defaults(stats_);
         }
-        battery_monitor_.deinit();
+
+        // 2. Perform sensor reading
+        ultrasonic::Reading reading = sensor_.read_level();
+        ESP_LOGI(TAG, "Reading raw: %.1f cm (Status: %d)", reading.cm, static_cast<int>(reading.result));
+
+        // Turn off sensor power as soon as we have the reading
+        power_.turn_off();
+
+        // 3. Process logic (Brain)
+        logic_.process_reading(reading, stats_);
+        logic_.update_operation_mode(stats_);
+
+        ESP_LOGI(
+            TAG,
+            "Result: %d, Distance: %.1f cm, Level: %d permille, Mode: %s",
+            static_cast<int>(stats_.last_result),
+            stats_.last_distance_cm,
+            stats_.level_permille,
+            stats_.backup_mode_active ? "BACKUP" : "NORMAL");
+
+        // 4. Save updated state
+        storage_.save(stats_);
+
+        // 5. Read battery status
+        if (battery_monitor_.init() == ESP_OK) {
+            battery_monitor::BatteryReading bat_reading;
+            if (battery_monitor_.read(bat_reading) == ESP_OK) {
+                logic_.process_battery(bat_reading.voltage_mv, stats_);
+                ESP_LOGI(TAG, "Battery: %d mV (%d%%), state: %d", 
+                         stats_.last_battery_mv, stats_.last_battery_percent, static_cast<int>(stats_.last_battery_state));
+            }
+            battery_monitor_.deinit();
+        }
+
+        // 6. Transmit data to Hub
+        send_report();
+
+        // 7. Listen for incoming commands (e.g. START_OTA) before sleeping
+        listen_for_commands(LISTEN_WINDOW_MS);
+
+        // 8. Wait if OTA is in progress
+        if (ota_controller_.is_busy()) {
+            ESP_LOGW(TAG, "OTA in progress, waiting for completion...");
+            while (ota_controller_.is_busy()) {
+                rtos_.task_delay(pdMS_TO_TICKS(1000));
+            }
+            ESP_LOGI(TAG, "OTA finished (failed/cancelled). Continuing loop.");
+        }
+
+        // 9. Delay before next run iteration
+        rtos_.task_delay(pdMS_TO_TICKS(RUN_LOOP_DELAY_MS));
     }
-
-    // 6. Transmit data to Hub
-    send_report();
-
-    // 7. Listen for incoming commands (e.g. START_OTA) before sleeping
-    listen_for_commands(LISTEN_WINDOW_MS);
-
-    // 8. Calculate sleep and enter deep sleep
-    uint64_t sleep_time_us = logic_.calculate_sleep_time_us(stats_);
-    enter_deep_sleep(sleep_time_us);
 }
 
 // =====================================================================
