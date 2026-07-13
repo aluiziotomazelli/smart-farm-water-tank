@@ -232,6 +232,7 @@ static esp_err_t setup_hardware()
     app_rx_queue = hal_freertos.queue_create(30, sizeof(espnow::AppMessage));
     config.app_rx_queue = app_rx_queue;
     config.wifi_channel = 0;
+    config.heartbeat_interval_ms = 0;
 
     espnow::EspNowManager& espnow = espnow::EspNowManager::instance();
     if ((err = espnow.init(config)) != ESP_OK) {

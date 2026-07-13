@@ -57,8 +57,9 @@ void WaterTankApp::run()
         ultrasonic::Reading reading = sensor_.read_level();
         // ESP_LOGI(TAG, "Reading raw: %.1f cm (Status: %d)", reading.cm, static_cast<int>(reading.result));
 
-        ESP_LOGI(TAG, "Distance: %.1f cm", reading.cm);
-        ESP_LOGI(TAG, "UsResult = %d", static_cast<int>(reading.result));
+        ESP_LOGI(TAG, "%.1f - %d", reading.cm, static_cast<int>(reading.result));
+        // ESP_LOGI(TAG, "Distance: %.1f cm", reading.cm);
+        // ESP_LOGI(TAG, "UsResult = %d", static_cast<int>(reading.result));
 
         // Turn off sensor power as soon as we have the reading
         power_.turn_off();
