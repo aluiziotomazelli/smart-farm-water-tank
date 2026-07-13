@@ -1,0 +1,238 @@
+[2026-07-12 21:40:41.984] [192.168.1.64] I (5214) main: UDP Remote Logging initialized to 192.168.1.23:4444
+[2026-07-12 21:40:41.985] [192.168.1.64] I (5214) main: New firmware pending verification. Confirming as valid.
+[2026-07-12 21:40:41.985] [192.168.1.64] I (5234) main: Firmware confirmed successfully.
+[2026-07-12 21:40:41.990] [192.168.1.64] I (5234) WaterTankApp: Starting application flow
+[2026-07-12 21:40:42.903] [192.168.1.64] I (6154) wifi:
+[2026-07-12 21:40:42.913] [192.168.1.64] <ba-add>idx:0 (ifx:0, 3e:4e:05:24:7d:3b), tid:5, ssn:5, winSize:64
+[2026-07-12 21:40:42.914] [192.168.1.64] 
+[2026-07-12 21:40:42.931] [192.168.1.64] I (6184) WaterTankApp: Reading raw: 110.0 cm (Status: 0)
+[2026-07-12 21:40:42.933] [192.168.1.64] I (6184) WaterTankApp: Result: 0, Distance: 110.0 cm, Level: 376 permille, Mode: NORMAL
+[2026-07-12 21:40:42.950] [192.168.1.64] I (6194) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:40:42.951] [192.168.1.64] I (6194) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:40:42.952] [192.168.1.64] I (6194) BatteryMonitor: Initialized successfully
+[2026-07-12 21:40:42.965] [192.168.1.64] I (6214) WaterTankApp: Battery: 4100 mV (91%), state: 3
+[2026-07-12 21:40:42.966] [192.168.1.64] I (6214) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:40:42.966] [192.168.1.64] I (6214) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:40:43.018] [192.168.1.64] I (6264) WaterTankApp: Sending report: 376 permille
+[2026-07-12 21:40:48.212] [192.168.1.64] I (11464) WaterTankApp: Starting application flow
+[2026-07-12 21:40:49.169] [192.168.1.64] I (12414) WaterTankApp: Reading raw: 110.0 cm (Status: 0)
+[2026-07-12 21:40:49.170] [192.168.1.64] I (12414) WaterTankApp: Result: 0, Distance: 110.0 cm, Level: 376 permille, Mode: NORMAL
+[2026-07-12 21:40:49.174] [192.168.1.64] I (12424) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:40:49.175] [192.168.1.64] I (12424) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:40:49.177] [192.168.1.64] I (12424) BatteryMonitor: Initialized successfully
+[2026-07-12 21:40:49.194] [192.168.1.64] I (12444) WaterTankApp: Battery: 4096 mV (91%), state: 3
+[2026-07-12 21:40:49.197] [192.168.1.64] I (12444) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:40:49.198] [192.168.1.64] I (12444) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:40:49.250] [192.168.1.64] I (12494) WaterTankApp: Sending report: 376 permille
+[2026-07-12 21:40:54.451] [192.168.1.64] I (17704) WaterTankApp: Starting application flow
+[2026-07-12 21:40:55.403] [192.168.1.64] I (18654) WaterTankApp: Reading raw: 110.0 cm (Status: 0)
+[2026-07-12 21:40:55.405] [192.168.1.64] I (18654) WaterTankApp: Result: 0, Distance: 110.0 cm, Level: 376 permille, Mode: NORMAL
+[2026-07-12 21:40:55.413] [192.168.1.64] I (18664) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:40:55.415] [192.168.1.64] I (18664) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:40:55.417] [192.168.1.64] I (18664) BatteryMonitor: Initialized successfully
+[2026-07-12 21:40:55.434] [192.168.1.64] I (18684) WaterTankApp: Battery: 4112 mV (92%), state: 3
+[2026-07-12 21:40:55.436] [192.168.1.64] I (18684) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:40:55.437] [192.168.1.64] I (18684) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:40:55.496] [192.168.1.64] I (18734) WaterTankApp: Sending report: 376 permille
+[2026-07-12 21:41:00.692] [192.168.1.64] I (23944) WaterTankApp: Starting application flow
+[2026-07-12 21:41:01.642] [192.168.1.64] I (24894) WaterTankApp: Reading raw: 109.9 cm (Status: 0)
+[2026-07-12 21:41:01.645] [192.168.1.64] I (24894) WaterTankApp: Result: 0, Distance: 109.9 cm, Level: 376 permille, Mode: NORMAL
+[2026-07-12 21:41:01.653] [192.168.1.64] I (24904) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:41:01.656] [192.168.1.64] I (24904) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:41:01.657] [192.168.1.64] I (24904) BatteryMonitor: Initialized successfully
+[2026-07-12 21:41:01.674] [192.168.1.64] I (24924) WaterTankApp: Battery: 4110 mV (92%), state: 3
+[2026-07-12 21:41:01.676] [192.168.1.64] I (24924) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:41:01.677] [192.168.1.64] I (24924) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:41:01.729] [192.168.1.64] I (24974) WaterTankApp: Sending report: 376 permille
+[2026-07-12 21:41:06.931] [192.168.1.64] I (30184) WaterTankApp: Starting application flow
+[2026-07-12 21:41:07.886] [192.168.1.64] I (31134) WaterTankApp: Reading raw: 110.0 cm (Status: 0)
+[2026-07-12 21:41:07.888] [192.168.1.64] I (31134) WaterTankApp: Result: 0, Distance: 110.0 cm, Level: 375 permille, Mode: NORMAL
+[2026-07-12 21:41:07.893] [192.168.1.64] I (31144) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:41:07.895] [192.168.1.64] I (31144) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:41:07.897] [192.168.1.64] I (31144) BatteryMonitor: Initialized successfully
+[2026-07-12 21:41:07.918] [192.168.1.64] I (31164) WaterTankApp: Battery: 4102 mV (91%), state: 3
+[2026-07-12 21:41:07.918] [192.168.1.64] I (31164) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:41:07.918] [192.168.1.64] I (31164) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:41:07.973] [192.168.1.64] I (31214) WaterTankApp: Sending report: 375 permille
+[2026-07-12 21:41:13.171] [192.168.1.64] I (36424) WaterTankApp: Starting application flow
+[2026-07-12 21:41:14.122] [192.168.1.64] I (37374) WaterTankApp: Reading raw: 110.0 cm (Status: 0)
+[2026-07-12 21:41:14.132] [192.168.1.64] I (37374) WaterTankApp: Result: 0, Distance: 110.0 cm, Level: 376 permille, Mode: NORMAL
+[2026-07-12 21:41:14.134] [192.168.1.64] I (37384) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:41:14.136] [192.168.1.64] I (37384) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:41:14.138] [192.168.1.64] I (37384) BatteryMonitor: Initialized successfully
+[2026-07-12 21:41:14.155] [192.168.1.64] I (37404) WaterTankApp: Battery: 4106 mV (92%), state: 3
+[2026-07-12 21:41:14.156] [192.168.1.64] I (37404) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:41:14.158] [192.168.1.64] I (37404) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:41:14.209] [192.168.1.64] I (37454) WaterTankApp: Sending report: 376 permille
+[2026-07-12 21:41:19.411] [192.168.1.64] I (42664) WaterTankApp: Starting application flow
+[2026-07-12 21:41:20.362] [192.168.1.64] I (43614) WaterTankApp: Reading raw: 0.0 cm (Status: 4)
+[2026-07-12 21:41:20.363] [192.168.1.64] I (43614) WaterTankApp: Result: 4, Distance: 110.0 cm, Level: 376 permille, Mode: NORMAL
+[2026-07-12 21:41:20.378] [192.168.1.64] I (43624) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:41:20.378] [192.168.1.64] I (43624) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:41:20.379] [192.168.1.64] I (43624) BatteryMonitor: Initialized successfully
+[2026-07-12 21:41:20.393] [192.168.1.64] I (43644) WaterTankApp: Battery: 4108 mV (92%), state: 3
+[2026-07-12 21:41:20.395] [192.168.1.64] I (43644) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:41:20.396] [192.168.1.64] I (43644) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:41:20.448] [192.168.1.64] I (43694) WaterTankApp: Sending report: 376 permille
+[2026-07-12 21:41:25.641] [192.168.1.64] I (48894) WaterTankApp: Starting application flow
+[2026-07-12 21:41:26.593] [192.168.1.64] I (49844) WaterTankApp: Reading raw: 110.2 cm (Status: 0)
+[2026-07-12 21:41:26.594] [192.168.1.64] I (49844) WaterTankApp: Result: 0, Distance: 110.2 cm, Level: 374 permille, Mode: NORMAL
+[2026-07-12 21:41:26.604] [192.168.1.64] I (49854) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:41:26.605] [192.168.1.64] I (49854) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:41:26.608] [192.168.1.64] I (49854) BatteryMonitor: Initialized successfully
+[2026-07-12 21:41:26.624] [192.168.1.64] I (49874) WaterTankApp: Battery: 4106 mV (92%), state: 3
+[2026-07-12 21:41:26.626] [192.168.1.64] I (49874) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:41:26.627] [192.168.1.64] I (49874) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:41:26.679] [192.168.1.64] I (49924) WaterTankApp: Sending report: 374 permille
+[2026-07-12 21:41:31.881] [192.168.1.64] I (55134) WaterTankApp: Starting application flow
+[2026-07-12 21:41:32.835] [192.168.1.64] I (56084) WaterTankApp: Reading raw: 109.7 cm (Status: 0)
+[2026-07-12 21:41:32.835] [192.168.1.64] I (56084) WaterTankApp: Result: 0, Distance: 109.7 cm, Level: 378 permille, Mode: NORMAL
+[2026-07-12 21:41:32.847] [192.168.1.64] I (56094) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:41:32.847] [192.168.1.64] I (56094) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:41:32.849] [192.168.1.64] I (56094) BatteryMonitor: Initialized successfully
+[2026-07-12 21:41:32.871] [192.168.1.64] I (56114) WaterTankApp: Battery: 4100 mV (91%), state: 3
+[2026-07-12 21:41:32.872] [192.168.1.64] I (56114) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:41:32.872] [192.168.1.64] I (56114) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:41:32.921] [192.168.1.64] I (56164) WaterTankApp: Sending report: 378 permille
+[2026-07-12 21:41:37.125] [192.168.1.64] I (60374) HeartbeatMgr: Heartbeat response received from Hub (RSSI: -24 dBm)
+[2026-07-12 21:41:38.111] [192.168.1.64] I (61364) WaterTankApp: Starting application flow
+[2026-07-12 21:41:39.064] [192.168.1.64] I (62314) WaterTankApp: Reading raw: 109.9 cm (Status: 0)
+[2026-07-12 21:41:39.064] [192.168.1.64] I (62314) WaterTankApp: Result: 0, Distance: 109.9 cm, Level: 376 permille, Mode: NORMAL
+[2026-07-12 21:41:39.074] [192.168.1.64] I (62324) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:41:39.075] [192.168.1.64] I (62324) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:41:39.077] [192.168.1.64] I (62324) BatteryMonitor: Initialized successfully
+[2026-07-12 21:41:39.094] [192.168.1.64] I (62344) WaterTankApp: Battery: 4102 mV (91%), state: 3
+[2026-07-12 21:41:39.096] [192.168.1.64] I (62344) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:41:39.098] [192.168.1.64] I (62344) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:41:39.149] [192.168.1.64] I (62394) WaterTankApp: Sending report: 376 permille
+[2026-07-12 21:41:44.352] [192.168.1.64] I (67604) WaterTankApp: Starting application flow
+[2026-07-12 21:41:45.302] [192.168.1.64] I (68554) WaterTankApp: Reading raw: 109.8 cm (Status: 0)
+[2026-07-12 21:41:45.307] [192.168.1.64] I (68554) WaterTankApp: Result: 0, Distance: 109.8 cm, Level: 377 permille, Mode: NORMAL
+[2026-07-12 21:41:45.318] [192.168.1.64] I (68564) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:41:45.320] [192.168.1.64] I (68564) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:41:45.320] [192.168.1.64] I (68564) BatteryMonitor: Initialized successfully
+[2026-07-12 21:41:45.334] [192.168.1.64] I (68584) WaterTankApp: Battery: 4112 mV (92%), state: 3
+[2026-07-12 21:41:45.336] [192.168.1.64] I (68584) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:41:45.337] [192.168.1.64] I (68584) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:41:45.389] [192.168.1.64] I (68634) WaterTankApp: Sending report: 377 permille
+[2026-07-12 21:41:50.591] [192.168.1.64] I (73844) WaterTankApp: Starting application flow
+[2026-07-12 21:41:51.542] [192.168.1.64] I (74794) WaterTankApp: Reading raw: 88.7 cm (Status: 1)
+[2026-07-12 21:41:51.544] [192.168.1.64] I (74794) WaterTankApp: Result: 1, Distance: 88.7 cm, Level: 517 permille, Mode: NORMAL
+[2026-07-12 21:41:51.554] [192.168.1.64] I (74804) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:41:51.558] [192.168.1.64] I (74804) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:41:51.558] [192.168.1.64] I (74804) BatteryMonitor: Initialized successfully
+[2026-07-12 21:41:51.574] [192.168.1.64] I (74824) WaterTankApp: Battery: 4088 mV (90%), state: 3
+[2026-07-12 21:41:51.575] [192.168.1.64] I (74824) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:41:51.577] [192.168.1.64] I (74824) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:41:51.629] [192.168.1.64] I (74874) WaterTankApp: Sending report: 517 permille
+[2026-07-12 21:41:56.834] [192.168.1.64] I (80084) WaterTankApp: Starting application flow
+[2026-07-12 21:41:57.782] [192.168.1.64] I (81034) WaterTankApp: Reading raw: 110.0 cm (Status: 1)
+[2026-07-12 21:41:57.784] [192.168.1.64] I (81034) WaterTankApp: Result: 1, Distance: 110.0 cm, Level: 375 permille, Mode: NORMAL
+[2026-07-12 21:41:57.794] [192.168.1.64] I (81044) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:41:57.795] [192.168.1.64] I (81044) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:41:57.797] [192.168.1.64] I (81044) BatteryMonitor: Initialized successfully
+[2026-07-12 21:41:57.819] [192.168.1.64] I (81064) WaterTankApp: Battery: 4100 mV (91%), state: 3
+[2026-07-12 21:41:57.819] [192.168.1.64] I (81064) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:41:57.819] [192.168.1.64] I (81064) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:41:57.869] [192.168.1.64] I (81114) WaterTankApp: Sending report: 375 permille
+[2026-07-12 21:42:03.079] [192.168.1.64] I (86324) WaterTankApp: Starting application flow
+[2026-07-12 21:42:04.022] [192.168.1.64] I (87274) WaterTankApp: Reading raw: 109.9 cm (Status: 1)
+[2026-07-12 21:42:04.024] [192.168.1.64] I (87274) WaterTankApp: Result: 1, Distance: 109.9 cm, Level: 376 permille, Mode: NORMAL
+[2026-07-12 21:42:04.034] [192.168.1.64] I (87284) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:42:04.035] [192.168.1.64] I (87284) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:42:04.037] [192.168.1.64] I (87284) BatteryMonitor: Initialized successfully
+[2026-07-12 21:42:04.054] [192.168.1.64] I (87304) WaterTankApp: Battery: 4110 mV (92%), state: 3
+[2026-07-12 21:42:04.056] [192.168.1.64] I (87304) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:42:04.057] [192.168.1.64] I (87304) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:42:04.109] [192.168.1.64] I (87354) WaterTankApp: Sending report: 376 permille
+[2026-07-12 21:42:09.311] [192.168.1.64] I (92564) WaterTankApp: Starting application flow
+[2026-07-12 21:42:10.262] [192.168.1.64] I (93514) WaterTankApp: Reading raw: 109.9 cm (Status: 1)
+[2026-07-12 21:42:10.267] [192.168.1.64] I (93514) WaterTankApp: Result: 1, Distance: 109.9 cm, Level: 376 permille, Mode: NORMAL
+[2026-07-12 21:42:10.281] [192.168.1.64] I (93524) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:42:10.281] [192.168.1.64] I (93524) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:42:10.281] [192.168.1.64] I (93524) BatteryMonitor: Initialized successfully
+[2026-07-12 21:42:10.297] [192.168.1.64] I (93544) WaterTankApp: Battery: 4100 mV (91%), state: 3
+[2026-07-12 21:42:10.298] [192.168.1.64] I (93544) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:42:10.299] [192.168.1.64] I (93544) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:42:10.350] [192.168.1.64] I (93594) WaterTankApp: Sending report: 376 permille
+[2026-07-12 21:42:15.541] [192.168.1.64] I (98794) WaterTankApp: Starting application flow
+[2026-07-12 21:42:16.494] [192.168.1.64] I (99744) WaterTankApp: Reading raw: 110.0 cm (Status: 0)
+[2026-07-12 21:42:16.494] [192.168.1.64] I (99744) WaterTankApp: Result: 0, Distance: 110.0 cm, Level: 375 permille, Mode: NORMAL
+[2026-07-12 21:42:16.533] [192.168.1.64] I (99784) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:42:16.535] [192.168.1.64] I (99784) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:42:16.536] [192.168.1.64] I (99784) BatteryMonitor: Initialized successfully
+[2026-07-12 21:42:16.554] [192.168.1.64] I (99804) WaterTankApp: Battery: 4110 mV (92%), state: 3
+[2026-07-12 21:42:16.556] [192.168.1.64] I (99804) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:42:16.557] [192.168.1.64] I (99804) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:42:16.609] [192.168.1.64] I (99854) WaterTankApp: Sending report: 375 permille
+[2026-07-12 21:42:21.821] [192.168.1.64] I (105064) WaterTankApp: Starting application flow
+[2026-07-12 21:42:22.762] [192.168.1.64] I (106014) WaterTankApp: Reading raw: 110.1 cm (Status: 0)
+[2026-07-12 21:42:22.764] [192.168.1.64] I (106014) WaterTankApp: Result: 0, Distance: 110.1 cm, Level: 375 permille, Mode: NORMAL
+[2026-07-12 21:42:22.774] [192.168.1.64] I (106024) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:42:22.775] [192.168.1.64] I (106024) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:42:22.777] [192.168.1.64] I (106024) BatteryMonitor: Initialized successfully
+[2026-07-12 21:42:22.794] [192.168.1.64] I (106044) WaterTankApp: Battery: 4112 mV (92%), state: 3
+[2026-07-12 21:42:22.796] [192.168.1.64] I (106044) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:42:22.798] [192.168.1.64] I (106044) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:42:22.849] [192.168.1.64] I (106094) WaterTankApp: Sending report: 375 permille
+[2026-07-12 21:42:28.051] [192.168.1.64] I (111304) WaterTankApp: Starting application flow
+[2026-07-12 21:42:29.002] [192.168.1.64] I (112254) WaterTankApp: Reading raw: 109.9 cm (Status: 0)
+[2026-07-12 21:42:29.003] [192.168.1.64] I (112254) WaterTankApp: Result: 0, Distance: 109.9 cm, Level: 376 permille, Mode: NORMAL
+[2026-07-12 21:42:29.014] [192.168.1.64] I (112264) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:42:29.015] [192.168.1.64] I (112264) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:42:29.017] [192.168.1.64] I (112264) BatteryMonitor: Initialized successfully
+[2026-07-12 21:42:29.040] [192.168.1.64] I (112284) WaterTankApp: Battery: 4106 mV (92%), state: 3
+[2026-07-12 21:42:29.040] [192.168.1.64] I (112284) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:42:29.040] [192.168.1.64] I (112284) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:42:29.090] [192.168.1.64] I (112334) WaterTankApp: Sending report: 376 permille
+[2026-07-12 21:42:34.291] [192.168.1.64] I (117544) WaterTankApp: Starting application flow
+[2026-07-12 21:42:35.243] [192.168.1.64] I (118494) WaterTankApp: Reading raw: 109.9 cm (Status: 0)
+[2026-07-12 21:42:35.246] [192.168.1.64] I (118494) WaterTankApp: Result: 0, Distance: 109.9 cm, Level: 376 permille, Mode: NORMAL
+[2026-07-12 21:42:35.256] [192.168.1.64] I (118504) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:42:35.258] [192.168.1.64] I (118504) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:42:35.259] [192.168.1.64] I (118504) BatteryMonitor: Initialized successfully
+[2026-07-12 21:42:35.276] [192.168.1.64] I (118524) WaterTankApp: Battery: 4090 mV (90%), state: 3
+[2026-07-12 21:42:35.278] [192.168.1.64] I (118524) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:42:35.278] [192.168.1.64] I (118524) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:42:35.336] [192.168.1.64] I (118574) WaterTankApp: Sending report: 376 permille
+[2026-07-12 21:42:37.135] [192.168.1.64] I (120384) HeartbeatMgr: Heartbeat response received from Hub (RSSI: -25 dBm)
+[2026-07-12 21:42:40.531] [192.168.1.64] I (123784) WaterTankApp: Starting application flow
+[2026-07-12 21:42:41.482] [192.168.1.64] I (124734) WaterTankApp: Reading raw: 110.2 cm (Status: 0)
+[2026-07-12 21:42:41.484] [192.168.1.64] I (124734) WaterTankApp: Result: 0, Distance: 110.2 cm, Level: 374 permille, Mode: NORMAL
+[2026-07-12 21:42:41.494] [192.168.1.64] I (124744) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:42:41.495] [192.168.1.64] I (124744) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:42:41.497] [192.168.1.64] I (124744) BatteryMonitor: Initialized successfully
+[2026-07-12 21:42:41.514] [192.168.1.64] I (124764) WaterTankApp: Battery: 4108 mV (92%), state: 3
+[2026-07-12 21:42:41.516] [192.168.1.64] I (124764) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:42:41.518] [192.168.1.64] I (124764) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:42:41.569] [192.168.1.64] I (124814) WaterTankApp: Sending report: 374 permille
+[2026-07-12 21:42:46.773] [192.168.1.64] I (130024) WaterTankApp: Starting application flow
+[2026-07-12 21:42:47.725] [192.168.1.64] I (130974) WaterTankApp: Reading raw: 110.0 cm (Status: 0)
+[2026-07-12 21:42:47.726] [192.168.1.64] I (130974) WaterTankApp: Result: 0, Distance: 110.0 cm, Level: 375 permille, Mode: NORMAL
+[2026-07-12 21:42:47.734] [192.168.1.64] I (130984) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:42:47.735] [192.168.1.64] I (130984) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:42:47.737] [192.168.1.64] I (130984) BatteryMonitor: Initialized successfully
+[2026-07-12 21:42:47.755] [192.168.1.64] I (131004) WaterTankApp: Battery: 4112 mV (92%), state: 3
+[2026-07-12 21:42:47.756] [192.168.1.64] I (131004) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:42:47.757] [192.168.1.64] I (131004) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:42:47.812] [192.168.1.64] I (131054) WaterTankApp: Sending report: 375 permille
+[2026-07-12 21:42:53.011] [192.168.1.64] I (136264) WaterTankApp: Starting application flow
+[2026-07-12 21:42:53.962] [192.168.1.64] I (137214) WaterTankApp: Reading raw: 110.0 cm (Status: 0)
+[2026-07-12 21:42:53.972] [192.168.1.64] I (137214) WaterTankApp: Result: 0, Distance: 110.0 cm, Level: 376 permille, Mode: NORMAL
+[2026-07-12 21:42:53.974] [192.168.1.64] I (137224) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:42:53.975] [192.168.1.64] I (137224) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:42:53.977] [192.168.1.64] I (137224) BatteryMonitor: Initialized successfully
+[2026-07-12 21:42:53.995] [192.168.1.64] I (137244) WaterTankApp: Battery: 4100 mV (91%), state: 3
+[2026-07-12 21:42:53.996] [192.168.1.64] I (137244) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:42:53.997] [192.168.1.64] I (137244) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:42:54.049] [192.168.1.64] I (137294) WaterTankApp: Sending report: 376 permille
+[2026-07-12 21:42:59.251] [192.168.1.64] I (142504) WaterTankApp: Starting application flow
+[2026-07-12 21:43:00.202] [192.168.1.64] I (143454) WaterTankApp: Reading raw: 110.0 cm (Status: 1)
+[2026-07-12 21:43:00.204] [192.168.1.64] I (143454) WaterTankApp: Result: 1, Distance: 110.0 cm, Level: 375 permille, Mode: NORMAL
+[2026-07-12 21:43:00.221] [192.168.1.64] I (143464) AdcBatteryReader: ADC calibration initialized successfully
+[2026-07-12 21:43:00.222] [192.168.1.64] I (143464) AdcBatteryReader: Initialized successfully on GPIO 3 (Unit 0, Channel 3)
+[2026-07-12 21:43:00.225] [192.168.1.64] I (143464) BatteryMonitor: Initialized successfully
+[2026-07-12 21:43:00.245] [192.168.1.64] I (143484) WaterTankApp: Battery: 4118 mV (93%), state: 3
+[2026-07-12 21:43:00.245] [192.168.1.64] I (143484) AdcBatteryReader: Deinitialized successfully
+[2026-07-12 21:43:00.245] [192.168.1.64] I (143484) BatteryMonitor: Deinitialized successfully
+[2026-07-12 21:43:00.288] [192.168.1.64] I (143534) WaterTankApp: Sending report: 375 permille
