@@ -41,7 +41,7 @@ WaterTankApp::WaterTankApp(
 void WaterTankApp::run()
 {
     while (true) {
-        ESP_LOGI(TAG, "Starting application flow");
+        // ESP_LOGI(TAG, "Starting application flow");
 
         // Power on sensor and wait for warmup
         power_.turn_on();
@@ -55,7 +55,10 @@ void WaterTankApp::run()
 
         // 2. Perform sensor reading
         ultrasonic::Reading reading = sensor_.read_level();
-        ESP_LOGI(TAG, "Reading raw: %.1f cm (Status: %d)", reading.cm, static_cast<int>(reading.result));
+        // ESP_LOGI(TAG, "Reading raw: %.1f cm (Status: %d)", reading.cm, static_cast<int>(reading.result));
+
+        ESP_LOGI(TAG, "Distance: %.1f cm", reading.cm);
+        ESP_LOGI(TAG, "UsResult = %d", static_cast<int>(reading.result));
 
         // Turn off sensor power as soon as we have the reading
         power_.turn_off();
@@ -64,13 +67,13 @@ void WaterTankApp::run()
         logic_.process_reading(reading, stats_);
         logic_.update_operation_mode(stats_);
 
-        ESP_LOGI(
-            TAG,
-            "Result: %d, Distance: %.1f cm, Level: %d permille, Mode: %s",
-            static_cast<int>(stats_.last_result),
-            stats_.last_distance_cm,
-            stats_.level_permille,
-            stats_.backup_mode_active ? "BACKUP" : "NORMAL");
+        // ESP_LOGI(
+        //     TAG,
+        //     "Result: %d, Distance: %.1f cm, Level: %d permille, Mode: %s",
+        //     static_cast<int>(stats_.last_result),
+        //     stats_.last_distance_cm,
+        //     stats_.level_permille,
+        //     stats_.backup_mode_active ? "BACKUP" : "NORMAL");
 
         // 4. Save updated state
         storage_.save(stats_);
@@ -80,8 +83,12 @@ void WaterTankApp::run()
             battery_monitor::BatteryReading bat_reading;
             if (battery_monitor_.read(bat_reading) == ESP_OK) {
                 logic_.process_battery(bat_reading.voltage_mv, stats_);
-                ESP_LOGI(TAG, "Battery: %d mV (%d%%), state: %d", 
-                         stats_.last_battery_mv, stats_.last_battery_percent, static_cast<int>(stats_.last_battery_state));
+                // ESP_LOGI(
+                //     TAG,
+                //     "Battery: %d mV (%d%%), state: %d",
+                //     stats_.last_battery_mv,
+                //     stats_.last_battery_percent,
+                //     static_cast<int>(stats_.last_battery_state));
             }
             battery_monitor_.deinit();
         }
@@ -124,7 +131,7 @@ esp_err_t WaterTankApp::send_report()
     report.float_switch_is_full = float_switch_.is_tank_full();
     report.backup_mode_active = stats_.backup_mode_active;
 
-    ESP_LOGI(TAG, "Sending report: %d permille", report.level_permille);
+    // ESP_LOGI(TAG, "Sending report: %d permille", report.level_permille);
 
     esp_err_t err = comm_.send_data(
         espnow::ReservedIds::HUB,
@@ -209,8 +216,9 @@ void WaterTankApp::listen_for_commands(uint32_t timeout_ms)
 
     while ((sys_timer_.get_time_us() / 1000) < deadline_ms) {
         int64_t remaining = deadline_ms - (sys_timer_.get_time_us() / 1000);
-        if (remaining <= 0) break;
-        
+        if (remaining <= 0)
+            break;
+
         if (rtos_.queue_receive(rx_queue_, &msg, pdMS_TO_TICKS(remaining)) == pdPASS) {
             if (msg.msg_type == espnow::MessageType::COMMAND) {
                 auto cmd = static_cast<espnow::CommandType>(msg.payload_type);
@@ -222,4 +230,3 @@ void WaterTankApp::listen_for_commands(uint32_t timeout_ms)
         }
     }
 }
-

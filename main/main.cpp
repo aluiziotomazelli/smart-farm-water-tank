@@ -26,6 +26,7 @@
 #include "hal_timer.hpp"
 #include "hal_nvs.hpp"
 #include "hal_freertos.hpp"
+#include <cstdint>
 
 #include "freertos/ringbuf.h"
 #include "lwip/sockets.h"
@@ -39,6 +40,8 @@ static constexpr gpio_num_t US_ECHO_GPIO = GPIO_NUM_5;       // D3
 static constexpr gpio_num_t FLOAT_SWITCH_GPIO = GPIO_NUM_2;  // D0 need be D0-D3 GPIO 3-5 to enable deep-sleep wake-up
 static constexpr gpio_num_t BATTERY_LEVEL_GPIO = GPIO_NUM_3; // D1
 static constexpr gpio_num_t BOOT_BUTTON_GPIO = GPIO_NUM_9;   // Boot button has no external pad
+
+static constexpr uint8_t PING_COUNT = 7; // Initial ping count per distance measurment
 
 // HAL instances for sharing across components
 static idf_hals::GpioHAL hal_gpio;
@@ -88,7 +91,7 @@ ultrasonic::UsConfig us_config{
     .warmup_time_ms = 600};
 
 static ultrasonic::UsSensor sensor_us{US_TRIG_GPIO, US_ECHO_GPIO, us_config};
-static UltrasonicLevelSensorAdapter sensor_adapter{sensor_us};
+static UltrasonicLevelSensorAdapter sensor_adapter{sensor_us, PING_COUNT};
 
 // SleepHAL
 static idf_hals::SleepHAL sleep_hw;
