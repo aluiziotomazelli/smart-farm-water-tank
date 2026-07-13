@@ -163,12 +163,6 @@ static esp_err_t setup_hardware()
         return err;
     }
 
-    ESP_LOGI(TAG, "Connecting to WiFi synchronously...");
-    if ((err = wifi.connect(15000)) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to connect to WiFi: %s", esp_err_to_name(err));
-        return err;
-    }
-
     // FloatSwitch
     if ((err = float_switch.init()) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize FloatSwitch: %s", esp_err_to_name(err));
@@ -187,7 +181,7 @@ static esp_err_t setup_hardware()
     config.node_type = static_cast<espnow::NodeType>(FarmNodeType::SENSOR);
     app_rx_queue = hal_freertos.queue_create(30, sizeof(espnow::AppMessage));
     config.app_rx_queue = app_rx_queue;
-    config.wifi_channel = 1;
+    config.wifi_channel = 0;
 
     espnow::EspNowManager& espnow = espnow::EspNowManager::instance();
     if ((err = espnow.init(config)) != ESP_OK) {
@@ -212,6 +206,13 @@ static esp_err_t setup_hardware()
     if (!ota_manager.init(ota_config)) {
         ESP_LOGE(TAG, "Failed to initialize OTA Manager");
         return ESP_FAIL;
+    }
+
+    // connect wifi
+    ESP_LOGI(TAG, "Connecting to WiFi synchronously...");
+    if ((err = wifi.connect(15000)) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to connect to WiFi: %s", esp_err_to_name(err));
+        return err;
     }
 
     return ESP_OK;
