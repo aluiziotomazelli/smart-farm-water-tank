@@ -163,6 +163,12 @@ static esp_err_t setup_hardware()
         return err;
     }
 
+    ESP_LOGI(TAG, "Initiating continuous WiFi connection...");
+    if ((err = wifi.connect()) != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to initiate WiFi connection: %s", esp_err_to_name(err));
+        // Do not fail startup if WiFi cannot connect immediately (e.g. AP offline)
+    }
+
     // FloatSwitch
     if ((err = float_switch.init()) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize FloatSwitch: %s", esp_err_to_name(err));
