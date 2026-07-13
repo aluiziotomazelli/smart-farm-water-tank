@@ -125,7 +125,7 @@ static OtaConfig ota_config{
     .task_priority = 5,
     .transport = {.manifest_timeout_ms = 30000, .firmware_timeout_ms = 30000},
     .security = {.allow_http_during_development = true},
-    .allow_same_version = false,
+    .allow_same_version = true,
     .restart_on_success = true,
 };
 static OtaManager ota_manager(ota_deps);
