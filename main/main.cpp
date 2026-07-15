@@ -234,11 +234,11 @@ static esp_err_t setup_hardware()
     config.wifi_channel = 0;
     config.heartbeat_interval_ms = 0;
 
-    espnow::EspNowManager& espnow = espnow::EspNowManager::instance();
-    if ((err = espnow.init(config)) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize EspNowManager: %s", esp_err_to_name(err));
-        return err;
-    }
+    // espnow::EspNowManager& espnow = espnow::EspNowManager::instance();
+    // if ((err = espnow.init(config)) != ESP_OK) {
+    //     ESP_LOGE(TAG, "Failed to initialize EspNowManager: %s", esp_err_to_name(err));
+    //     return err;
+    // }
 
     // PowerControl
     if ((err = power.init()) != ESP_OK) {
@@ -261,7 +261,7 @@ static esp_err_t setup_hardware()
 
     // connect wifi
     ESP_LOGI(TAG, "Connecting to WiFi synchronously...");
-    if ((err = wifi.connect(15000)) != ESP_OK) {
+    if ((err = wifi.connect()) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to connect to WiFi: %s", esp_err_to_name(err));
         return err;
     }

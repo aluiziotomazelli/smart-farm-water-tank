@@ -57,7 +57,7 @@ void WaterTankApp::run()
         ultrasonic::Reading reading = sensor_.read_level();
         // ESP_LOGI(TAG, "Reading raw: %.1f cm (Status: %d)", reading.cm, static_cast<int>(reading.result));
 
-        ESP_LOGI(TAG, "%.1f - %d", reading.cm, static_cast<int>(reading.result));
+        // ESP_LOGI(TAG, "Distance: %.1f - UsResult %d", reading.cm, static_cast<int>(reading.result));
         // ESP_LOGI(TAG, "Distance: %.1f cm", reading.cm);
         // ESP_LOGI(TAG, "UsResult = %d", static_cast<int>(reading.result));
 
@@ -84,21 +84,29 @@ void WaterTankApp::run()
             battery_monitor::BatteryReading bat_reading;
             if (battery_monitor_.read(bat_reading) == ESP_OK) {
                 logic_.process_battery(bat_reading.voltage_mv, stats_);
-                // ESP_LOGI(
-                //     TAG,
-                //     "Battery: %d mV (%d%%), state: %d",
-                //     stats_.last_battery_mv,
-                //     stats_.last_battery_percent,
-                //     static_cast<int>(stats_.last_battery_state));
+                //         // ESP_LOGI(
+                //         //     TAG,
+                //         //     "Battery: %d mV (%d%%), state: %d",
+                //         //     stats_.last_battery_mv,
+                //         //     stats_.last_battery_percent,
+                //         //     static_cast<int>(stats_.last_battery_state));
+                //     }
+                battery_monitor_.deinit();
             }
-            battery_monitor_.deinit();
         }
 
+        ESP_LOGI(
+            TAG,
+            "Distance: %.1f - UsResult %d | Battery: %d",
+            reading.cm,
+            static_cast<int>(reading.result),
+            stats_.last_battery_mv);
+
         // 6. Transmit data to Hub
-        send_report();
+        // send_report();
 
         // 7. Listen for incoming commands (e.g. START_OTA) before sleeping
-        listen_for_commands(LISTEN_WINDOW_MS);
+        // listen_for_commands(LISTEN_WINDOW_MS);
 
         // 8. Wait if OTA is in progress
         if (ota_controller_.is_busy()) {
