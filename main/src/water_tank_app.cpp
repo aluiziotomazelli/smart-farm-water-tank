@@ -97,9 +97,10 @@ void WaterTankApp::run()
 
         ESP_LOGI(
             TAG,
-            "Distance: %.1f - UsResult %d | Battery: %d",
+            "Distance: %.1f - UsResult %d - Permile: %d | Battery: %d",
             reading.cm,
             static_cast<int>(reading.result),
+            stats_.level_permille,
             stats_.last_battery_mv);
 
         // 6. Transmit data to Hub
