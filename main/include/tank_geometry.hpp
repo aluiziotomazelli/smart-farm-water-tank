@@ -83,22 +83,25 @@ private:
      *
      * The algorithm does not need to change — only the 6 pairs of values below.
      *
-     * Current assumption: drain at 150 cm (= physical top of tank).
+     * Current assumption: drain at 141 cm from base. The top segment has 33 cm total,
+     * but only 26 cm to the overflow pipe. We leave a 4 cm safety margin, making the
+     * effective height of the top segment 22 cm. The sensor offset is 28.5 cm in v0.2.0.
+     *
      * Depths measured downward from that level:
      *   [0]   0 cm  → 1000 ppm  (full / drain)
-     *   [1]  30 cm  →  751 ppm  (step 5/4 boundary at 120 cm from bottom)
-     *   [2]  60 cm  →  528 ppm  (step 4/3 boundary at  90 cm from bottom)
-     *   [3]  90 cm  →  329 ppm  (step 3/2 boundary at  60 cm from bottom)
-     *   [4] 120 cm  →  153 ppm  (step 2/1 boundary at  30 cm from bottom)
-     *   [5] 150 cm  →    0 ppm  (bottom / empty)
+     *   [1]  22 cm  →  835 ppm  (step 5/4 boundary at 119 cm from bottom)
+     *   [2]  52 cm  →  616 ppm  (step 4/3 boundary at  89 cm from bottom)
+     *   [3]  82 cm  →  403 ppm  (step 3/2 boundary at  59 cm from bottom)
+     *   [4] 112 cm  →  195 ppm  (step 2/1 boundary at  29 cm from bottom)
+     *   [5] 141 cm  →    0 ppm  (bottom / empty)
      */
     static constexpr LutEntry VOLUME_LUT[] = {
         {  0, 1000}, // full line (drain / top)
-        { 30,  751}, // step 5/4 boundary
-        { 60,  528}, // step 4/3 boundary
-        { 90,  329}, // step 3/2 boundary
-        {120,  153}, // step 2/1 boundary
-        {150,    0}, // bottom (empty)
+        { 22,  835}, // step 5/4 boundary
+        { 52,  616}, // step 4/3 boundary
+        { 82,  403}, // step 3/2 boundary
+        {112,  195}, // step 2/1 boundary
+        {141,    0}, // bottom (empty)
     };
 
     static constexpr uint8_t LUT_SIZE = sizeof(VOLUME_LUT) / sizeof(VOLUME_LUT[0]);
