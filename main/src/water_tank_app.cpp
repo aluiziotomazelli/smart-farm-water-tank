@@ -3,6 +3,11 @@
 #include "esp_sleep.h"
 #include "farm_protocol_types.hpp"
 
+// Define automatic OTA check configuration for testing
+#ifndef OTA_AUTOMATIC_CHECK_IN_TESTS
+#define OTA_AUTOMATIC_CHECK_IN_TESTS 0
+#endif
+
 static constexpr uint32_t RUN_LOOP_DELAY_MS = 5000;
 static constexpr uint32_t SENSOR_WARMUP_MS = 600;
 
@@ -110,6 +115,13 @@ void WaterTankApp::run()
         // listen_for_commands(LISTEN_WINDOW_MS);
 
         // 8. Wait if OTA is in progress
+#if defined(OTA_AUTOMATIC_CHECK_IN_TESTS) && OTA_AUTOMATIC_CHECK_IN_TESTS
+        if (!ota_controller_.is_busy()) {
+            ESP_LOGI(TAG, "Triggering automatic OTA check for this cycle...");
+            ota_controller_.on_ota_triggered(OtaTriggerSource::AUTOMATIC);
+        }
+#endif
+
         if (ota_controller_.is_busy()) {
             ESP_LOGW(TAG, "OTA in progress, waiting for completion...");
             while (ota_controller_.is_busy()) {

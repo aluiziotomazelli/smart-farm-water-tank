@@ -33,6 +33,11 @@
 
 static const char* TAG = "main";
 
+// Define automatic OTA check configuration for testing
+#ifndef OTA_AUTOMATIC_CHECK_IN_TESTS
+#define OTA_AUTOMATIC_CHECK_IN_TESTS 0
+#endif
+
 // Production Configuration for XIAO-ESP32-C3 Mini Board
 static constexpr gpio_num_t POWER_GPIO = GPIO_NUM_10;        // D10
 static constexpr gpio_num_t US_TRIG_GPIO = GPIO_NUM_4;       // D2
@@ -131,7 +136,7 @@ static OtaConfig ota_config{
     .task_priority = 5,
     .transport = {.manifest_timeout_ms = 30000, .firmware_timeout_ms = 30000},
     .security = {.allow_http_during_development = true},
-    .allow_same_version = true,
+    .allow_same_version = false,
     .restart_on_success = true,
 };
 static OtaManager ota_manager(ota_deps);
@@ -148,7 +153,7 @@ static OtaControllerConfig ota_ctrl_config{
     .task_priority = 5};
 
 // UDP Remote Logging config and functions
-static const char* LOG_DEST_IP = "192.168.1.23"; // TODO: Ajuste para o IP do seu computador
+static const char* LOG_DEST_IP = "192.168.1.23"; // TODO: Adjust to your server ip
 static constexpr uint32_t LOG_DEST_PORT = 4444;
 static RingbufHandle_t log_ringbuf = nullptr;
 static vprintf_like_t original_vprintf = nullptr;

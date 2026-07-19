@@ -61,7 +61,7 @@ private:
      */
     struct LutEntry
     {
-        uint8_t  depth_cm; ///< Depth below the full-water line (cm).
+        uint8_t depth_cm;  ///< Depth below the full-water line (cm).
         uint16_t permille; ///< Volume fraction at this depth (0–1000).
     };
 
@@ -85,7 +85,7 @@ private:
      *
      * Current assumption: drain at 141 cm from base. The top segment has 33 cm total,
      * but only 26 cm to the overflow pipe. We leave a 4 cm safety margin, making the
-     * effective height of the top segment 22 cm. The sensor offset is 28.5 cm in v0.2.0.
+     * effective height of the top segment 22 cm. The sensor offset is 29.5 cm in v0.2.1.
      *
      * Depths measured downward from that level:
      *   [0]   0 cm  → 1000 ppm  (full / drain)
@@ -96,12 +96,12 @@ private:
      *   [5] 141 cm  →    0 ppm  (bottom / empty)
      */
     static constexpr LutEntry VOLUME_LUT[] = {
-        {  0, 1000}, // full line (drain / top)
-        { 22,  835}, // step 5/4 boundary
-        { 52,  616}, // step 4/3 boundary
-        { 82,  403}, // step 3/2 boundary
-        {112,  195}, // step 2/1 boundary
-        {141,    0}, // bottom (empty)
+        {0, 1000},  // full line (drain / top)
+        {22, 835},  // step 5/4 boundary
+        {52, 616},  // step 4/3 boundary
+        {82, 403},  // step 3/2 boundary
+        {112, 195}, // step 2/1 boundary
+        {141, 0},   // bottom (empty)
     };
 
     static constexpr uint8_t LUT_SIZE = sizeof(VOLUME_LUT) / sizeof(VOLUME_LUT[0]);
