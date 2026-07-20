@@ -25,7 +25,7 @@ TEST_F(WaterTankLogicTest, ProcessOkReadingUpdatesStats)
     EXPECT_EQ(stats.last_result, ultrasonic::UsResult::OK);
     EXPECT_EQ(stats.measure_count, 1);
     EXPECT_EQ(stats.ok_count, 1);
-    EXPECT_EQ(stats.level_permille, 751);           // 30cm depth in 150cm tank
+    EXPECT_EQ(stats.level_permille, 777);           // 30cm depth in tank with 5-cylinder LUT (between 22cm/835ppm and 52cm/616ppm)
     EXPECT_EQ(stats.fill_state, FillState::STABLE); // First reading
 }
 

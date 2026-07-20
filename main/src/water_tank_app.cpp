@@ -4,6 +4,7 @@
 #include "farm_protocol_types.hpp"
 
 static const char* TAG = "WaterTankApp";
+static constexpr uint8_t LEVEL_SAMPLE_COUNT = 5;
 
 WaterTankApp::WaterTankApp(
     ILevelSensor& sensor,
@@ -46,7 +47,7 @@ void WaterTankApp::run()
     }
 
     // 2. Perform sensor reading
-    ultrasonic::Reading reading = sensor_.read_level();
+    ultrasonic::Reading reading = sensor_.read_level(LEVEL_SAMPLE_COUNT);
     ESP_LOGI(TAG, "Reading raw: %.1f cm (Status: %d)", reading.cm, static_cast<int>(reading.result));
 
     // Turn off sensor power as soon as we have the reading

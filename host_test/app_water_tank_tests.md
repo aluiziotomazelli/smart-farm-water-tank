@@ -90,9 +90,9 @@ the adapter is fully testable on the host. The concrete `UsSensor` class (which 
 is no longer required.
 
 **What to test:**
-- `read_level()` forwards the call to `IUsSensor::read_distance()` with the correct `ping_count`.
+- `read_level(sample_count)` forwards the call to `IUsSensor::read_distance()` passing `sample_count` as `ping_count`.
 - The `Reading` returned by `read_distance()` is passed through unmodified.
-- Default `ping_count` of 5 is used when not explicitly set.
+- `LEVEL_SAMPLE_COUNT` constant in `WaterTankApp` is used as the sample count parameter.
 
 **Mock required:** `host_test/common/mock_us_sensor.hpp`
 - Interface: `ultrasonic::IUsSensor`

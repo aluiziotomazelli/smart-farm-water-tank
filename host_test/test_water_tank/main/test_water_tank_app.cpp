@@ -67,7 +67,7 @@ TEST_F(WaterTankAppTest, Run_ExecutesFullOrchestrationFlow) {
 
     // 2. Perform sensor reading
     ultrasonic::Reading reading = {ultrasonic::UsResult::OK, 50.0f};
-    EXPECT_CALL(mock_sensor, read_level()).WillOnce(Return(reading));
+    EXPECT_CALL(mock_sensor, read_level(_)).WillOnce(Return(reading));
 
     // 3. Turn off power (Energy saving)
     EXPECT_CALL(mock_power, turn_off()).Times(1);
@@ -96,7 +96,7 @@ TEST_F(WaterTankAppTest, Run_HandlesStorageLoadFailure) {
     EXPECT_CALL(mock_storage, reset_to_defaults(_)).Times(1);
     
     // Continue the rest of the flow
-    EXPECT_CALL(mock_sensor, read_level()).WillOnce(Return(ultrasonic::Reading{ultrasonic::UsResult::OK, 100.0f}));
+    EXPECT_CALL(mock_sensor, read_level(_)).WillOnce(Return(ultrasonic::Reading{ultrasonic::UsResult::OK, 100.0f}));
     EXPECT_CALL(mock_power, turn_off()).Times(1);
     EXPECT_CALL(mock_storage, save(_)).Times(1);
     EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).WillOnce(Return(ESP_OK));

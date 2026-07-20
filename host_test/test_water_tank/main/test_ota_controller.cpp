@@ -181,8 +181,8 @@ TEST_F(OtaControllerTest, IsBusyReturnsCorrectly)
 
 TEST_F(OtaControllerTest, StartArmsTriggersAndCreatesTask)
 {
-    MockOtaTrigger mock_trigger1;
-    MockOtaTrigger mock_trigger2;
+    NiceMock<MockOtaTrigger> mock_trigger1;
+    NiceMock<MockOtaTrigger> mock_trigger2;
     std::vector<IOtaTrigger*> triggers = {&mock_trigger1, &mock_trigger2};
 
     EXPECT_CALL(mock_trigger1, arm(testing::Ref(controller))).Times(1);
