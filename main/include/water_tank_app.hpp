@@ -1,6 +1,7 @@
 #pragma once
 
 #include "interfaces/i_hal_sleep.hpp"
+#include "interfaces/i_hal_system.hpp"
 #include "interfaces/i_level_sensor.hpp"
 #include "interfaces/i_water_tank_storage.hpp"
 #include "i_espnow_manager.hpp"
@@ -36,7 +37,8 @@ public:
         idf_hals::IHalFreertos& rtos,
         WaterTankLogic& logic,
         EspNowOtaTrigger& espnow_ota_trigger,
-        OtaController& ota_controller);
+        OtaController& ota_controller,
+        idf_hals::ISystemHAL& system_hal);
 
     /**
      * @brief Execute the main application loop.
@@ -57,6 +59,7 @@ private:
     WaterTankLogic& logic_;
     EspNowOtaTrigger& espnow_ota_trigger_;
     OtaController& ota_controller_;
+    idf_hals::ISystemHAL& system_hal_;
 
     WaterTankStats stats_;
 

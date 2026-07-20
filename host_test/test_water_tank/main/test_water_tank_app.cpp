@@ -16,6 +16,7 @@
 #include "mock_hal_freertos.hpp"
 #include "espnow_ota_trigger.hpp"
 #include "ota_controller.hpp"
+#include "mock_hal_system.hpp"
 
 using ::testing::_;
 using ::testing::Return;
@@ -35,6 +36,7 @@ protected:
     testing::NiceMock<idf_hals::MockTimerHAL> mock_sys_timer;
     testing::NiceMock<MockOtaManager> mock_ota;
     testing::NiceMock<idf_hals::MockHalFreertos> mock_rtos;
+    testing::NiceMock<idf_hals::MockSystemHAL> mock_system_hal;
     EspNowOtaTrigger espnow_ota_trigger;
     OtaController ota_controller{mock_wifi, mock_ota, mock_rtos};
     
@@ -42,7 +44,7 @@ protected:
     WaterTankLogic logic{geometry, mock_float_switch};
     QueueHandle_t dummy_queue = nullptr;
     
-    WaterTankApp app{mock_sensor, mock_float_switch, mock_storage, mock_comm, dummy_queue, mock_power, mock_sleep, mock_battery, mock_sys_timer, mock_rtos, logic, espnow_ota_trigger, ota_controller};
+    WaterTankApp app{mock_sensor, mock_float_switch, mock_storage, mock_comm, dummy_queue, mock_power, mock_sleep, mock_battery, mock_sys_timer, mock_rtos, logic, espnow_ota_trigger, ota_controller, mock_system_hal};
 
     void SetUp() override {
         // Default behaviors
@@ -107,9 +109,15 @@ TEST_F(WaterTankAppTest, Run_HandlesStorageLoadFailure) {
 
 TEST_F(WaterTankAppTest, Run_SleepOverrideCommandSetsSleepDuration) {
     QueueHandle_t mock_queue = reinterpret_cast<QueueHandle_t>(0x1234);
-    WaterTankApp app_with_queue{mock_sensor, mock_float_switch, mock_storage, mock_comm, mock_queue, mock_power, mock_sleep, mock_battery, mock_sys_timer, mock_rtos, logic, espnow_ota_trigger, ota_controller};
+    WaterTankApp app_with_queue{mock_sensor, mock_float_switch, mock_storage, mock_comm, mock_queue, mock_power, mock_sleep, mock_battery, mock_sys_timer, mock_rtos, logic, espnow_ota_trigger, ota_controller, mock_system_hal};
 
-    ON_CALL(mock_sys_timer, get_time_us()).WillByDefault(Return(0));
+    uint64_t current_time = 0;
+    EXPECT_CALL(mock_sys_timer, get_time_us())
+        .WillRepeatedly(testing::Invoke([&current_time]() {
+            uint64_t ret = current_time;
+            current_time += 1000ULL; // Advance 1ms per call
+            return ret;
+        }));
 
     // Simulate receiving SLEEP_OVERRIDE command (30 seconds)
     espnow::AppMessage msg{};
@@ -129,6 +137,38 @@ TEST_F(WaterTankAppTest, Run_SleepOverrideCommandSetsSleepDuration) {
     // Verify sleep timer is set to 30 seconds (30,000,000 us) instead of calculated sleep time
     EXPECT_CALL(mock_sleep, enable_timer_wakeup(30000000ULL)).Times(1);
     EXPECT_CALL(mock_sleep, deep_sleep_start()).Times(1);
+
+    app_with_queue.run();
+}
+
+TEST_F(WaterTankAppTest, Run_RebootCommandCallsSystemHal) {
+    QueueHandle_t mock_queue = reinterpret_cast<QueueHandle_t>(0x1234);
+    WaterTankApp app_with_queue{mock_sensor, mock_float_switch, mock_storage, mock_comm, mock_queue, mock_power, mock_sleep, mock_battery, mock_sys_timer, mock_rtos, logic, espnow_ota_trigger, ota_controller, mock_system_hal};
+
+    uint64_t current_time_reboot = 0;
+    EXPECT_CALL(mock_sys_timer, get_time_us())
+        .WillRepeatedly(testing::Invoke([&current_time_reboot]() {
+            uint64_t ret = current_time_reboot;
+            current_time_reboot += 1000ULL; // Advance 1ms per call
+            return ret;
+        }));
+
+    // Simulate receiving REBOOT command
+    espnow::AppMessage msg{};
+    msg.msg_type = espnow::MessageType::COMMAND;
+    msg.payload_type = static_cast<uint8_t>(espnow::CommandType::REBOOT);
+    msg.payload_len = 0;
+
+    EXPECT_CALL(mock_rtos, queue_receive(mock_queue, _, _))
+        .WillOnce(testing::DoAll(
+            testing::WithArg<1>([msg](void* pvBuffer) {
+                *reinterpret_cast<espnow::AppMessage*>(pvBuffer) = msg;
+            }),
+            Return(pdPASS)))
+        .WillRepeatedly(Return(0));
+
+    // Verify system_hal.restart() is called
+    EXPECT_CALL(mock_system_hal, restart()).Times(1);
 
     app_with_queue.run();
 }

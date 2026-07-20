@@ -19,7 +19,8 @@ WaterTankApp::WaterTankApp(
     idf_hals::IHalFreertos& rtos,
     WaterTankLogic& logic,
     EspNowOtaTrigger& espnow_ota_trigger,
-    OtaController& ota_controller)
+    OtaController& ota_controller,
+    idf_hals::ISystemHAL& system_hal)
     : sensor_(sensor)
     , float_switch_(float_switch)
     , storage_(storage)
@@ -33,6 +34,7 @@ WaterTankApp::WaterTankApp(
     , logic_(logic)
     , espnow_ota_trigger_(espnow_ota_trigger)
     , ota_controller_(ota_controller)
+    , system_hal_(system_hal)
 {
 }
 
@@ -210,8 +212,7 @@ uint64_t WaterTankApp::listen_for_commands(uint32_t timeout_ms)
                     }
                     else if (cmd == espnow::CommandType::REBOOT) {
                         ESP_LOGW(TAG, "Received REBOOT command from Hub");
-                        // TODO(hal): no IRebootHAL yet; direct call used as placeholder.
-                        // esp_restart();
+                        system_hal_.restart();
                     }
                 }
                 // Farm application commands (0x40–0xFF)
