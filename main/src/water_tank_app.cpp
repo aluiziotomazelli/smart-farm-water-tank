@@ -211,7 +211,7 @@ void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
         bool wake_high;
         if (float_switch_.get_wakeup_config(gpio_num, wake_high) == ESP_OK) {
             uint64_t pin_mask = 1ULL << gpio_num;
-            esp_deepsleep_gpio_wake_up_mode_t mode = wake_high ? ESP_GPIO_WAKEUP_GPIO_HIGH : ESP_GPIO_WAKEUP_GPIO_LOW;
+            idf_hals::GpioWakeupMode mode = wake_high ? idf_hals::GpioWakeupMode::HIGH_LEVEL : idf_hals::GpioWakeupMode::LOW_LEVEL;
             if (sleep_.deep_sleep_enable_gpio_wakeup(pin_mask, mode) == ESP_OK) {
                 stats_.gpio_wakeup_enabled = true;
                 ESP_LOGI(TAG, "GPIO wakeup enabled on pin %d (wake_on_high=%d)", gpio_num, wake_high);
