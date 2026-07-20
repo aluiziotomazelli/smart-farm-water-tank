@@ -1,6 +1,7 @@
 // app_water_tank/main/src/tank_geometry.cpp
 
 #include "tank_geometry.hpp"
+#include <cstdint>
 
 static const char* TAG = "TankGeometry";
 
@@ -9,7 +10,7 @@ uint16_t TankGeometry::calculate_permille(float distance_cm) const
     // Convert sensor distance to depth below the full-water line.
     // Depth 0  → tank full (at drain/offset level)
     // Depth max → tank empty (at bottom)
-    float depth = distance_cm - static_cast<float>(offset_cm_);
+    float depth = distance_cm - offset_cm_;
 
     float permille_f = depth_to_permille(depth);
 

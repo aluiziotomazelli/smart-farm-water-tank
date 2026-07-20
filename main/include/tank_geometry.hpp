@@ -35,7 +35,7 @@ public:
      *                         level (e.g. overflow drain). This is the only
      *                         runtime calibration parameter.
      */
-    explicit TankGeometry(uint8_t sensor_offset_cm)
+    explicit TankGeometry(float sensor_offset_cm)
         : offset_cm_(sensor_offset_cm)
     {
     }
@@ -106,7 +106,7 @@ private:
 
     static constexpr uint8_t LUT_SIZE = sizeof(VOLUME_LUT) / sizeof(VOLUME_LUT[0]);
 
-    const uint8_t offset_cm_; ///< Sensor distance (cm) when tank is at full level.
+    const float offset_cm_; ///< Sensor distance (cm) when tank is at full level.
 
     /**
      * @brief Interpolate volume permille from a depth value using the LUT.

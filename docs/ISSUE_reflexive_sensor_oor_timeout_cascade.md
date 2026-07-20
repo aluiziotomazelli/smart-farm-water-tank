@@ -218,7 +218,10 @@ Reduzir `timeout_us` para **~12.000–13.000 µs** em `us_config` reduz o tempo 
 
 ## Plano de Ação
 
-- [ ] **[Software]** Corrigir `us_driver.cpp` para aplicar `delay_ms(ping_interval_ms)` em todas as ramificações de saída de `ping_once()`.
-- [ ] **[Mecânica]** Baixar o sensor dentro da caixinha para reduzir reflexões no cone de 15°.
-- [ ] **[Config]** Atualizar `timeout_us = 13000` em `main.cpp`.
+- [x] **[Software]** Corrigir `us_driver.cpp` para aplicar `delay_ms(ping_interval_ms)` em todas as ramificações de saída de `ping_once()`.  
+  > **Status:** Concluído na v1.1.0 do submódulo `ultrasonic_sensor`. Os delays de inter-ping e warmup foram movidos para o orquestrador `UsSensor`, garantindo o intervalo necessário após qualquer resultado de ping.
+- [x] **[Mecânica]** Baixar o sensor dentro da caixinha para reduzir reflexões no cone de 15°.  
+  > **Status:** Concluído. O sensor físico foi abaixado em 3.7 cm, resultando em um novo offset de `25.8 cm` (anteriormente `29.5 cm`).
+- [x] **[Config]** Atualizar `timeout_us = 13000` em `main.cpp`.  
+  > **Status:** Concluído na v0.2.2. O `timeout_us` foi configurado para 13.000 µs (Correção 3). Adicionalmente, o `ping_interval_ms` foi aumentado para 100 ms e o `PING_COUNT` para 9 (Correção 4).
 - [ ] **[Validação]** Rodar teste de campo com caixa d'água baixa (>70 cm) e validar ausência de cascatas de TIMEOUT e ausência de falsos `OUT_OF_RANGE`.
