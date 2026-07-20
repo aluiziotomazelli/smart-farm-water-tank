@@ -95,7 +95,7 @@ ultrasonic::UsConfig us_config{
     .max_distance_cm = SENSOR_MAX_DISTANCE_CM,
     .warmup_time_ms = 600};
 
-static ultrasonic::UsSensor sensor_us{US_TRIG_GPIO, US_ECHO_GPIO, us_config};
+static ultrasonic::UsSensor sensor_us{hal_gpio, hal_timer, hal_sys_rom, hal_freertos, US_TRIG_GPIO, US_ECHO_GPIO, us_config};
 static UltrasonicLevelSensorAdapter sensor_adapter{sensor_us, PING_COUNT};
 
 // SleepHAL
