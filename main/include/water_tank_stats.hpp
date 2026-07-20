@@ -49,7 +49,7 @@ struct WaterTankStats
     // --- Battery Stats ---
     uint16_t last_battery_mv = 0;
     uint8_t last_battery_percent = 0;
-    BatteryState last_battery_state = BatteryState::UNKNOWN;
+    farm::BatteryState last_battery_state = farm::BatteryState::UNKNOWN;
 
     void reset() { *this = {}; }
 };

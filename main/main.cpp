@@ -177,8 +177,8 @@ static esp_err_t setup_hardware()
 
     // EspNowManager
     espnow::EspNowConfig config;
-    config.node_id = static_cast<espnow::NodeId>(FarmNodeId::WATER_TANK);
-    config.node_type = static_cast<espnow::NodeType>(FarmNodeType::SENSOR);
+    config.node_id = static_cast<espnow::NodeId>(farm::NodeId::WATER_TANK);
+    config.node_type = static_cast<espnow::NodeType>(farm::NodeType::SENSOR);
     app_rx_queue = hal_freertos.queue_create(30, sizeof(espnow::AppMessage));
     config.app_rx_queue = app_rx_queue;
     config.wifi_channel = 1;

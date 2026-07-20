@@ -104,3 +104,31 @@ TEST_F(WaterTankAppTest, Run_HandlesStorageLoadFailure) {
 
     app.run();
 }
+
+TEST_F(WaterTankAppTest, Run_SleepOverrideCommandSetsSleepDuration) {
+    QueueHandle_t mock_queue = reinterpret_cast<QueueHandle_t>(0x1234);
+    WaterTankApp app_with_queue{mock_sensor, mock_float_switch, mock_storage, mock_comm, mock_queue, mock_power, mock_sleep, mock_battery, mock_sys_timer, mock_rtos, logic, espnow_ota_trigger, ota_controller};
+
+    ON_CALL(mock_sys_timer, get_time_us()).WillByDefault(Return(0));
+
+    // Simulate receiving SLEEP_OVERRIDE command (30 seconds)
+    espnow::AppMessage msg{};
+    msg.msg_type = espnow::MessageType::COMMAND;
+    msg.payload_type = static_cast<uint8_t>(farm::CommandType::SLEEP_OVERRIDE);
+    farm::SleepOverrideCommand cmd{.sleep_time_s = 30};
+    memcpy(msg.payload, &cmd, sizeof(cmd));
+    msg.payload_len = sizeof(cmd);
+
+    EXPECT_CALL(mock_rtos, queue_receive(mock_queue, _, _))
+        .WillOnce(testing::DoAll(
+            testing::WithArg<1>([msg](void* pvBuffer) {
+                *reinterpret_cast<espnow::AppMessage*>(pvBuffer) = msg;
+            }),
+            Return(pdPASS)));
+
+    // Verify sleep timer is set to 30 seconds (30,000,000 us) instead of calculated sleep time
+    EXPECT_CALL(mock_sleep, enable_timer_wakeup(30000000ULL)).Times(1);
+    EXPECT_CALL(mock_sleep, deep_sleep_start()).Times(1);
+
+    app_with_queue.run();
+}

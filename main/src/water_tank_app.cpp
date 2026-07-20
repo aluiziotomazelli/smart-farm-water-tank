@@ -82,11 +82,11 @@ void WaterTankApp::run()
     // 6. Transmit data to Hub
     send_report();
 
-    // 7. Listen for incoming commands (e.g. START_OTA) before sleeping
-    listen_for_commands(LISTEN_WINDOW_MS);
+    // 7. Listen for incoming commands (e.g. START_OTA, SLEEP_OVERRIDE) before sleeping
+    uint64_t override_sleep_us = listen_for_commands(LISTEN_WINDOW_MS);
 
-    // 8. Calculate sleep and enter deep sleep
-    uint64_t sleep_time_us = logic_.calculate_sleep_time_us(stats_);
+    // 8. Calculate sleep and enter deep sleep (hub override takes precedence)
+    uint64_t sleep_time_us = (override_sleep_us > 0) ? override_sleep_us : logic_.calculate_sleep_time_us(stats_);
     enter_deep_sleep(sleep_time_us);
 }
 
@@ -96,7 +96,7 @@ void WaterTankApp::run()
 
 esp_err_t WaterTankApp::send_report()
 {
-    WaterLevelReport report = {};
+    farm::WaterLevelReport report = {};
 
     report.level_permille = stats_.level_permille;
     report.distance_cm = stats_.last_distance_cm;
@@ -112,7 +112,7 @@ esp_err_t WaterTankApp::send_report()
 
     esp_err_t err = comm_.send_data(
         espnow::ReservedIds::HUB,
-        static_cast<uint8_t>(FarmPayloadType::WATER_LEVEL_REPORT),
+        static_cast<uint8_t>(farm::PayloadType::WATER_LEVEL_REPORT),
         &report,
         sizeof(report),
         true // require_ack
@@ -124,25 +124,25 @@ esp_err_t WaterTankApp::send_report()
     return err;
 }
 
-SensorStatus WaterTankApp::map_status(ultrasonic::UsResult result)
+farm::SensorStatus WaterTankApp::map_status(ultrasonic::UsResult result)
 {
     switch (result) {
     case ultrasonic::UsResult::OK:
-        return SensorStatus::OK;
+        return farm::SensorStatus::OK;
     case ultrasonic::UsResult::WEAK_SIGNAL:
-        return SensorStatus::WARNING_LOW_SIGNAL;
+        return farm::SensorStatus::WARNING_LOW_SIGNAL;
     case ultrasonic::UsResult::TIMEOUT:
-        return SensorStatus::ERROR_TIMEOUT;
+        return farm::SensorStatus::ERROR_TIMEOUT;
     case ultrasonic::UsResult::OUT_OF_RANGE:
-        return SensorStatus::ERROR_OUT_OF_RANGE;
+        return farm::SensorStatus::ERROR_OUT_OF_RANGE;
     case ultrasonic::UsResult::HIGH_VARIANCE:
     case ultrasonic::UsResult::INSUFFICIENT_SAMPLES:
-        return SensorStatus::ERROR_UNSTABLE;
+        return farm::SensorStatus::ERROR_UNSTABLE;
     case ultrasonic::UsResult::ECHO_STUCK:
     case ultrasonic::UsResult::HW_FAULT:
-        return SensorStatus::ERROR_HARDWARE;
+        return farm::SensorStatus::ERROR_HARDWARE;
     default:
-        return SensorStatus::UNKNOWN;
+        return farm::SensorStatus::UNKNOWN;
     }
 }
 
@@ -181,11 +181,13 @@ void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
     sleep_.deep_sleep_start();
 }
 
-void WaterTankApp::listen_for_commands(uint32_t timeout_ms)
+uint64_t WaterTankApp::listen_for_commands(uint32_t timeout_ms)
 {
+    uint64_t override_sleep_us = 0;
+
     if (!rx_queue_) {
         rtos_.task_delay(pdMS_TO_TICKS(timeout_ms));
-        return;
+        return 0;
     }
 
     int64_t deadline_ms = (sys_timer_.get_time_us() / 1000) + timeout_ms;
@@ -197,13 +199,38 @@ void WaterTankApp::listen_for_commands(uint32_t timeout_ms)
         
         if (rtos_.queue_receive(rx_queue_, &msg, pdMS_TO_TICKS(remaining)) == pdPASS) {
             if (msg.msg_type == espnow::MessageType::COMMAND) {
-                auto cmd = static_cast<espnow::CommandType>(msg.payload_type);
-                if (cmd == espnow::CommandType::START_OTA) {
-                    ESP_LOGW(TAG, "Received START_OTA command from Hub - triggering OTA");
-                    espnow_ota_trigger_.notify();
+                const auto payload_type = msg.payload_type;
+
+                // Generic transport commands (0x01–0x3F)
+                if (payload_type <= 0x3F) {
+                    auto cmd = static_cast<espnow::CommandType>(payload_type);
+                    if (cmd == espnow::CommandType::START_OTA) {
+                        ESP_LOGW(TAG, "Received START_OTA command from Hub - triggering OTA");
+                        espnow_ota_trigger_.notify();
+                    }
+                    else if (cmd == espnow::CommandType::REBOOT) {
+                        ESP_LOGW(TAG, "Received REBOOT command from Hub");
+                        // TODO(hal): no IRebootHAL yet; direct call used as placeholder.
+                        // esp_restart();
+                    }
+                }
+                // Farm application commands (0x40–0xFF)
+                else {
+                    auto cmd = static_cast<farm::CommandType>(payload_type);
+                    if (cmd == farm::CommandType::SLEEP_OVERRIDE) {
+                        if (msg.payload_len >= sizeof(farm::SleepOverrideCommand)) {
+                            farm::SleepOverrideCommand sleep_cmd{};
+                            memcpy(&sleep_cmd, msg.payload, sizeof(sleep_cmd));
+                            override_sleep_us = static_cast<uint64_t>(sleep_cmd.sleep_time_s) * 1000000ULL;
+                            ESP_LOGI(TAG, "Received SLEEP_OVERRIDE: %lu s", static_cast<unsigned long>(sleep_cmd.sleep_time_s));
+                            break;
+                        }
+                    }
                 }
             }
         }
     }
+
+    return override_sleep_us;
 }
 
