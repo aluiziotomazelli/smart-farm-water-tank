@@ -237,14 +237,14 @@ static esp_err_t setup_hardware()
     config.node_type = static_cast<espnow::NodeType>(FarmNodeType::SENSOR);
     app_rx_queue = hal_freertos.queue_create(30, sizeof(espnow::AppMessage));
     config.app_rx_queue = app_rx_queue;
-    config.wifi_channel = 0;
+    config.wifi_channel = 1;
     config.heartbeat_interval_ms = 0;
 
-    // espnow::EspNowManager& espnow = espnow::EspNowManager::instance();
-    // if ((err = espnow.init(config)) != ESP_OK) {
-    //     ESP_LOGE(TAG, "Failed to initialize EspNowManager: %s", esp_err_to_name(err));
-    //     return err;
-    // }
+    espnow::EspNowManager& espnow = espnow::EspNowManager::instance();
+    if ((err = espnow.init(config)) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize EspNowManager: %s", esp_err_to_name(err));
+        return err;
+    }
 
     // PowerControl
     if ((err = power.init()) != ESP_OK) {
@@ -271,6 +271,9 @@ static esp_err_t setup_hardware()
         ESP_LOGE(TAG, "Failed to connect to WiFi: %s", esp_err_to_name(err));
         return err;
     }
+
+    // Now that WiFi is connected, set EspNow channel policy to FIXED so EspNowManager won't hop channels during scans
+    espnow.set_channel_policy(espnow::ChannelPolicy::FIXED);
 
     // Initialize UDP Remote Logger after WiFi connection is active
     log_ringbuf = xRingbufferCreate(8192, RINGBUF_TYPE_NOSPLIT);
