@@ -8,7 +8,7 @@
 // depth is now encoded directly in the last entry of TankGeometry::VOLUME_LUT.
 // Kept here for documentation and future NVS/calibration use.
 static constexpr uint8_t TANK_HEIGHT_CM = 150; ///< Nominal total height of the tank (cm). See TankGeometry::VOLUME_LUT.
-static constexpr float SENSOR_OFFSET_CM = 25.8; ///< Offset of the sensor from the top of water max level (cm)
+static constexpr float SENSOR_OFFSET_CM = 28.1; ///< Offset of the sensor from the top of water max level (cm)
 
 static constexpr float SENSOR_MIN_DISTANCE_CM = 25.0f;  ///< Minimum distance for sensor valid measure
 static constexpr float SENSOR_MAX_DISTANCE_CM = 150.0f; ///< Maximum distance for sensor valid measure
