@@ -282,6 +282,10 @@ uint64_t WaterTankApp::listen_for_commands(uint32_t timeout_ms)
                     }
                     else if (cmd == espnow::CommandType::REBOOT) {
                         ESP_LOGW(TAG, "Received REBOOT command from Hub");
+                        if (wifi_.get_state() = wifi_manager::State::CONNECTED_GOT_IP) {
+                            wifi_.disconnect(2000);
+                            wifi_.stop();
+                        }
                         system_hal_.restart();
                     }
                 }
