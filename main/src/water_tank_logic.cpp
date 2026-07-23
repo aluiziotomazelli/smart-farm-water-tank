@@ -155,54 +155,54 @@ void WaterTankLogic::process_battery(uint16_t battery_mv, WaterTankStats& stats)
 
     // Classify battery state with hysteresis to avoid flapping
     constexpr uint16_t HYSTERESIS_MV = 50;
-    BatteryState new_state = stats.last_battery_state;
+    farm::BatteryState new_state = stats.last_battery_state;
 
-    if (new_state == BatteryState::UNKNOWN) {
+    if (new_state == farm::BatteryState::UNKNOWN) {
         if (battery_mv <= BATTERY_CRITICAL_MV) {
-            new_state = BatteryState::CRITICAL;
+            new_state = farm::BatteryState::CRITICAL;
         }
         else if (battery_mv <= BATTERY_LOW_MV) {
-            new_state = BatteryState::LOW;
+            new_state = farm::BatteryState::LOW;
         }
         else if (battery_mv >= BATTERY_FULL_MV) {
-            new_state = BatteryState::FULL;
+            new_state = farm::BatteryState::FULL;
         }
         else {
-            new_state = BatteryState::NORMAL;
+            new_state = farm::BatteryState::NORMAL;
         }
     }
     else {
         // Critical threshold check (going down, enters immediately)
         if (battery_mv <= BATTERY_CRITICAL_MV) {
-            new_state = BatteryState::CRITICAL;
+            new_state = farm::BatteryState::CRITICAL;
         }
         // Low threshold check
         else if (battery_mv <= BATTERY_LOW_MV) {
             // Can only recover to LOW from CRITICAL if we exceed the hysteresis
-            if (new_state != BatteryState::CRITICAL || battery_mv > BATTERY_CRITICAL_MV + HYSTERESIS_MV) {
-                new_state = BatteryState::LOW;
+            if (new_state != farm::BatteryState::CRITICAL || battery_mv > BATTERY_CRITICAL_MV + HYSTERESIS_MV) {
+                new_state = farm::BatteryState::LOW;
             }
         }
         // Full threshold check (enters immediately)
         else if (battery_mv >= BATTERY_FULL_MV) {
-            new_state = BatteryState::FULL;
+            new_state = farm::BatteryState::FULL;
         }
         // Normal range check
         else {
-            if (new_state == BatteryState::FULL) {
+            if (new_state == farm::BatteryState::FULL) {
                 // Can only drop to NORMAL from FULL if we fall below hysteresis
                 if (battery_mv < BATTERY_FULL_MV - HYSTERESIS_MV) {
-                    new_state = BatteryState::NORMAL;
+                    new_state = farm::BatteryState::NORMAL;
                 }
             }
-            else if (new_state == BatteryState::LOW) {
+            else if (new_state == farm::BatteryState::LOW) {
                 // Can only recover to NORMAL from LOW if we exceed hysteresis
                 if (battery_mv > BATTERY_LOW_MV + HYSTERESIS_MV) {
-                    new_state = BatteryState::NORMAL;
+                    new_state = farm::BatteryState::NORMAL;
                 }
             }
             else {
-                new_state = BatteryState::NORMAL;
+                new_state = farm::BatteryState::NORMAL;
             }
         }
     }

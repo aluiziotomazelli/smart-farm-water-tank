@@ -61,7 +61,7 @@ private:
     WaterTankStats stats_;
 
     esp_err_t send_report();
-    SensorStatus map_status(ultrasonic::UsResult result);
+    farm::SensorStatus map_status(ultrasonic::UsResult result);
     void enter_deep_sleep(uint64_t sleep_time_us);
     void listen_for_commands(uint32_t timeout_ms);
 };
