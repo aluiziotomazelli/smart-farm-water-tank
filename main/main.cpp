@@ -263,7 +263,7 @@ static esp_err_t setup_hardware()
 
     // connect wifi
     ESP_LOGI(TAG, "Connecting to WiFi synchronously...");
-    if ((err = wifi.connect()) != ESP_OK) {
+    if ((err = wifi.connect(15000)) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to connect to WiFi: %s", esp_err_to_name(err));
         return err;
     }
