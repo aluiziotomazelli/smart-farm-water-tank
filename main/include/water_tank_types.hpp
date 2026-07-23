@@ -29,6 +29,10 @@ static constexpr uint64_t TIMER_UNKNOWN_US = 60ULL * 1000000ULL; ///< Time to sl
 // 200ms covers hub processing (10-20ms) and ESP-NOW hardware retries safely
 static constexpr uint32_t LISTEN_WINDOW_MS = 200;
 
+// OTA settings
+static constexpr uint32_t OTA_WIFI_CONNECT_TIMEOUT_MS = 15000;
+static constexpr uint32_t OTA_WATCHDOG_TIMEOUT_MS = 120000;
+
 static constexpr float WEAK_SLEEP_FACTOR = 0.5f;     ///< Factor to reduce sleep time when sensor reading is weak
 static constexpr float INVALID_SLEEP_FACTOR = 0.25f; ///< Factor to reduce sleep time when sensor reading is invalid
 

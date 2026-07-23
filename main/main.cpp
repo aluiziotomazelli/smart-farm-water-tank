@@ -14,7 +14,6 @@
 #include "ota_manager.hpp"
 #include "button_ota_trigger.hpp"
 #include "espnow_ota_trigger.hpp"
-#include "ota_controller.hpp"
 #include "wifi_manager.hpp"
 
 #include "battery_monitor.hpp"
@@ -134,20 +133,13 @@ static OtaConfig ota_config{
     .transport = {.manifest_timeout_ms = 30000, .firmware_timeout_ms = 30000},
     .security = {.allow_http_during_development = true},
     .allow_same_version = false,
-    .restart_on_success = true,
+    .restart_on_success = false,
 };
 static OtaManager ota_manager(ota_deps);
 
 // OTA triggers: boot button + espnow
 static ButtonOtaTrigger btn_trigger(hal_gpio, hal_freertos, BOOT_BUTTON_GPIO, 200);
 static EspNowOtaTrigger espnow_ota_trigger;
-
-// OTA Controller config
-static OtaControllerConfig ota_ctrl_config{
-    .wifi_connect_timeout_ms = 30000,
-    .ota_watchdog_timeout_ms = 120000,
-    .task_stack_size = 4096,
-    .task_priority = 5};
 
 // UDP Remote Logging config and functions
 static const char* LOG_DEST_IP = "192.168.1.23"; // TODO: Adjust to your server ip
@@ -309,10 +301,6 @@ extern "C" void app_main()
         }
     }
 
-    // Instantiate and start non-blocking OtaController
-    static OtaController ota_controller(wifi, ota_manager, hal_freertos, ota_ctrl_config);
-    ota_controller.start({&btn_trigger, &espnow_ota_trigger});
-
     // Instantiate app with dependencies
     WaterTankApp app(
         sensor_adapter,
@@ -326,8 +314,10 @@ extern "C" void app_main()
         hal_timer,
         hal_freertos,
         logic,
-        espnow_ota_trigger,
-        ota_controller);
+        wifi,
+        ota_manager,
+        btn_trigger,
+        espnow_ota_trigger);
 
     // Run the main application flow
     app.run();

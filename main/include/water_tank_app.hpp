@@ -12,14 +12,15 @@
 #include "interfaces/i_battery_monitor.hpp"
 #include "interfaces/i_hal_timer.hpp"
 #include "interfaces/i_hal_freertos.hpp"
-#include "espnow_ota_trigger.hpp"
-#include "ota_controller.hpp"
+#include <atomic>
+#include "interfaces/i_ota_trigger.hpp"
+#include "interfaces/i_ota_manager.hpp"
 
 /**
  * @class WaterTankApp
  * @brief Orchestrator for the Water Tank monitoring application.
  */
-class WaterTankApp
+class WaterTankApp : public IOtaTriggerListener
 {
 public:
     /** @brief Constructor for testing (dependency injection) */
@@ -35,13 +36,18 @@ public:
         idf_hals::ITimerHAL& sys_timer,
         idf_hals::IHalFreertos& rtos,
         WaterTankLogic& logic,
-        EspNowOtaTrigger& espnow_ota_trigger,
-        OtaController& ota_controller);
+        wifi_manager::IWiFiManager& wifi,
+        IOtaManager& ota_manager,
+        IOtaTrigger& btn_trigger,
+        IOtaTrigger& espnow_trigger);
 
     /**
      * @brief Execute the main application loop.
      */
     void run();
+
+    /** @copydoc IOtaTriggerListener::on_ota_triggered */
+    void on_ota_triggered(OtaTriggerSource source) override;
 
 private:
     ILevelSensor& sensor_;
@@ -55,8 +61,12 @@ private:
     idf_hals::ITimerHAL& sys_timer_;
     idf_hals::IHalFreertos& rtos_;
     WaterTankLogic& logic_;
-    EspNowOtaTrigger& espnow_ota_trigger_;
-    OtaController& ota_controller_;
+    wifi_manager::IWiFiManager& wifi_;
+    IOtaManager& ota_manager_;
+    IOtaTrigger& btn_trigger_;
+    IOtaTrigger& espnow_trigger_;
+
+    std::atomic<bool> ota_triggered_{false};
 
     WaterTankStats stats_;
 

@@ -1,6 +1,8 @@
 #include "water_tank_app.hpp"
 #include "esp_log.h"
 #include "esp_sleep.h"
+#include "esp_system.h"
+#include "espnow_ota_trigger.hpp"
 #include "farm_protocol_types.hpp"
 
 static constexpr uint32_t RUN_LOOP_DELAY_MS = 10000;
@@ -20,8 +22,10 @@ WaterTankApp::WaterTankApp(
     idf_hals::ITimerHAL& sys_timer,
     idf_hals::IHalFreertos& rtos,
     WaterTankLogic& logic,
-    EspNowOtaTrigger& espnow_ota_trigger,
-    OtaController& ota_controller)
+    wifi_manager::IWiFiManager& wifi,
+    IOtaManager& ota_manager,
+    IOtaTrigger& btn_trigger,
+    IOtaTrigger& espnow_trigger)
     : sensor_(sensor)
     , float_switch_(float_switch)
     , storage_(storage)
@@ -33,90 +37,73 @@ WaterTankApp::WaterTankApp(
     , sys_timer_(sys_timer)
     , rtos_(rtos)
     , logic_(logic)
-    , espnow_ota_trigger_(espnow_ota_trigger)
-    , ota_controller_(ota_controller)
+    , wifi_(wifi)
+    , ota_manager_(ota_manager)
+    , btn_trigger_(btn_trigger)
+    , espnow_trigger_(espnow_trigger)
 {
+}
+
+void WaterTankApp::on_ota_triggered(OtaTriggerSource source)
+{
+    ESP_LOGI(TAG, "OTA triggered from source: %d", static_cast<int>(source));
+    ota_triggered_ = true;
 }
 
 void WaterTankApp::run()
 {
-        // ESP_LOGI(TAG, "Starting application flow");
+    // Arm triggers for OTA
+    btn_trigger_.arm(*this);
+    espnow_trigger_.arm(*this);
 
-        // Power on sensor and wait for warmup
-        power_.turn_on();
-        rtos_.task_delay(pdMS_TO_TICKS(SENSOR_WARMUP_MS));
+    // ESP_LOGI(TAG, "Starting application flow");
 
-        // 1. Load state and statistics from persistent storage
-        if (storage_.load(stats_) != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to load storage, using defaults");
-            storage_.reset_to_defaults(stats_);
+    // Power on sensor and wait for warmup
+    power_.turn_on();
+    rtos_.task_delay(pdMS_TO_TICKS(SENSOR_WARMUP_MS));
+
+    // 1. Load state and statistics from persistent storage
+    if (storage_.load(stats_) != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to load storage, using defaults");
+        storage_.reset_to_defaults(stats_);
+    }
+
+    // 2. Perform sensor reading
+    ultrasonic::Reading reading = sensor_.read_level();
+
+    // Turn off sensor power as soon as we have the reading
+    power_.turn_off();
+
+    // 3. Process logic (Brain)
+    logic_.process_reading(reading, stats_);
+    logic_.update_operation_mode(stats_);
+
+    // 4. Save updated state
+    storage_.save(stats_);
+
+    // 5. Read battery status
+    if (battery_monitor_.init() == ESP_OK) {
+        battery_monitor::BatteryReading bat_reading;
+        if (battery_monitor_.read(bat_reading) == ESP_OK) {
+            logic_.process_battery(bat_reading.voltage_mv, stats_);
+            battery_monitor_.deinit();
         }
+    }
 
-        // 2. Perform sensor reading
-        ultrasonic::Reading reading = sensor_.read_level();
-        // ESP_LOGI(TAG, "Reading raw: %.1f cm (Status: %d)", reading.cm, static_cast<int>(reading.result));
+    ESP_LOGI(
+        TAG,
+        "Distance: %.1f - UsResult %d - Permile: %d | Battery: %d | FillState: %d",
+        reading.cm,
+        static_cast<int>(reading.result),
+        stats_.level_permille,
+        stats_.last_battery_mv,
+        static_cast<int>(stats_.fill_state));
 
-        // ESP_LOGI(TAG, "Distance: %.1f - UsResult %d", reading.cm, static_cast<int>(reading.result));
-        // ESP_LOGI(TAG, "Distance: %.1f cm", reading.cm);
-        // ESP_LOGI(TAG, "UsResult = %d", static_cast<int>(reading.result));
+    // 6. Transmit data to Hub
+    send_report();
 
-        // Turn off sensor power as soon as we have the reading
-        power_.turn_off();
-
-        // 3. Process logic (Brain)
-        logic_.process_reading(reading, stats_);
-        logic_.update_operation_mode(stats_);
-
-        // ESP_LOGI(
-        //     TAG,
-        //     "Result: %d, Distance: %.1f cm, Level: %d permille, Mode: %s",
-        //     static_cast<int>(stats_.last_result),
-        //     stats_.last_distance_cm,
-        //     stats_.level_permille,
-        //     stats_.backup_mode_active ? "BACKUP" : "NORMAL");
-
-        // 4. Save updated state
-        storage_.save(stats_);
-
-        // 5. Read battery status
-        if (battery_monitor_.init() == ESP_OK) {
-            battery_monitor::BatteryReading bat_reading;
-            if (battery_monitor_.read(bat_reading) == ESP_OK) {
-                logic_.process_battery(bat_reading.voltage_mv, stats_);
-                //         // ESP_LOGI(
-                //         //     TAG,
-                //         //     "Battery: %d mV (%d%%), state: %d",
-                //         //     stats_.last_battery_mv,
-                //         //     stats_.last_battery_percent,
-                //         //     static_cast<int>(stats_.last_battery_state));
-                //     }
-                battery_monitor_.deinit();
-            }
-        }
-
-        ESP_LOGI(
-            TAG,
-            "Distance: %.1f - UsResult %d - Permile: %d | Battery: %d | FillState: %d",
-            reading.cm,
-            static_cast<int>(reading.result),
-            stats_.level_permille,
-            stats_.last_battery_mv,
-            static_cast<int>(stats_.fill_state));
-
-        // 6. Transmit data to Hub
-        send_report();
-
-        // 7. Listen for incoming commands (e.g. START_OTA) before sleeping
-        listen_for_commands(LISTEN_WINDOW_MS);
-
-        // 8. Wait if OTA is in progress
-        if (ota_controller_.is_busy()) {
-            ESP_LOGW(TAG, "OTA in progress, waiting for completion...");
-            while (ota_controller_.is_busy()) {
-                rtos_.task_delay(pdMS_TO_TICKS(1000));
-            }
-            ESP_LOGI(TAG, "OTA finished (failed/cancelled). Continuing loop.");
-        }
+    // 7. Listen for incoming commands (e.g. START_OTA) before sleeping
+    listen_for_commands(LISTEN_WINDOW_MS);
 
     uint64_t sleep_time_us = logic_.calculate_sleep_time_us(stats_);
     enter_deep_sleep(sleep_time_us);
@@ -141,8 +128,6 @@ esp_err_t WaterTankApp::send_report()
 
     report.float_switch_is_full = float_switch_.is_tank_full();
     report.backup_mode_active = stats_.backup_mode_active;
-
-    // ESP_LOGI(TAG, "Sending report: %d permille", report.level_permille);
 
     esp_err_t err = comm_.send_data(
         espnow::ReservedIds::HUB,
@@ -182,15 +167,64 @@ farm::SensorStatus WaterTankApp::map_status(ultrasonic::UsResult result)
 
 void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
 {
-    if (ota_controller_.is_busy()) {
-        ESP_LOGW(TAG, "OTA in progress, waiting for completion before sleeping...");
-        while (ota_controller_.is_busy()) {
-            rtos_.task_delay(pdMS_TO_TICKS(1000));
+    if (ota_triggered_) {
+        ESP_LOGI(TAG, "Processing pending OTA...");
+        bool wifi_ready = true;
+        bool connected_by_us = false;
+
+        if (wifi_.get_state() != wifi_manager::State::CONNECTED_GOT_IP) {
+            ESP_LOGI(TAG, "WiFi not connected. Connecting for OTA...");
+            if (wifi_.connect(OTA_WIFI_CONNECT_TIMEOUT_MS) == ESP_OK) {
+                connected_by_us = true;
+            } else {
+                ESP_LOGE(TAG, "Failed to connect to WiFi for OTA");
+                wifi_ready = false;
+            }
         }
-        ESP_LOGI(TAG, "OTA finished (failed/cancelled). Proceeding to deep sleep.");
+
+        if (wifi_ready) {
+            ota_manager_.start_ota();
+            uint32_t elapsed_ms = 0;
+            OtaStatus status = ota_manager_.get_status();
+
+            while (status != OtaStatus::READY_TO_RESTART &&
+                   status != OtaStatus::FAILED &&
+                   elapsed_ms < OTA_WATCHDOG_TIMEOUT_MS) {
+                rtos_.task_delay(pdMS_TO_TICKS(500));
+                elapsed_ms += 500;
+                status = ota_manager_.get_status();
+            }
+
+            if (status == OtaStatus::READY_TO_RESTART) {
+                ESP_LOGI(TAG, "OTA completed. Disconnecting WiFi and restarting safely.");
+                wifi_.disconnect(2000);
+                wifi_.stop(2000);
+                esp_restart();
+            } else {
+                ESP_LOGE(TAG, "OTA failed or timed out. Cancelling OTA.");
+                ota_manager_.cancel_ota();
+                if (connected_by_us) {
+                    ESP_LOGI(TAG, "Disconnecting WiFi connected by OTA...");
+                    wifi_.disconnect(2000);
+                }
+            }
+        }
+        ota_triggered_ = false;
     }
 
     ESP_LOGI(TAG, "Entering deep sleep for %llu s", sleep_time_us / 1000000);
+
+    // Disarm triggers before going to sleep
+    btn_trigger_.disarm();
+    espnow_trigger_.disarm();
+
+    // Ensure WiFi is disconnected and stopped before deep sleep
+    if (wifi_.get_state() != wifi_manager::State::UNINITIALIZED &&
+        wifi_.get_state() != wifi_manager::State::INITIALIZED) {
+        ESP_LOGI(TAG, "Ensuring WiFi is disconnected and stopped before deep sleep...");
+        wifi_.disconnect(2000);
+        wifi_.stop(2000);
+    }
 
     sleep_.disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
 
@@ -236,7 +270,7 @@ void WaterTankApp::listen_for_commands(uint32_t timeout_ms)
                 auto cmd = static_cast<espnow::CommandType>(msg.payload_type);
                 if (cmd == espnow::CommandType::START_OTA) {
                     ESP_LOGW(TAG, "Received START_OTA command from Hub - triggering OTA");
-                    espnow_ota_trigger_.notify();
+                    static_cast<EspNowOtaTrigger&>(espnow_trigger_).notify();
                 }
             }
         }
