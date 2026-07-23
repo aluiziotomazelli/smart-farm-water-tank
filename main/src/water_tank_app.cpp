@@ -198,10 +198,13 @@ void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
             }
 
             if (status == OtaStatus::READY_TO_RESTART) {
-                ESP_LOGI(TAG, "OTA completed. Disconnecting WiFi and restarting safely.");
-                wifi_.disconnect(2000);
-                wifi_.stop(2000);
-                esp_restart();
+                ESP_LOGI(TAG, "OTA completed. Disconnecting WiFi if connected and restarting safely.");
+                if (wifi_.get_state() != wifi_manager::State::UNINITIALIZED &&
+                    wifi_.get_state() != wifi_manager::State::INITIALIZED) {
+                    wifi_.disconnect(2000);
+                    wifi_.stop(2000);
+                }
+                system_hal_.restart();
             } else {
                 ESP_LOGE(TAG, "OTA failed or timed out. Cancelling OTA.");
                 ota_manager_.cancel_ota();
@@ -282,9 +285,10 @@ uint64_t WaterTankApp::listen_for_commands(uint32_t timeout_ms)
                     }
                     else if (cmd == espnow::CommandType::REBOOT) {
                         ESP_LOGW(TAG, "Received REBOOT command from Hub");
-                        if (wifi_.get_state() = wifi_manager::State::CONNECTED_GOT_IP) {
+                        if (wifi_.get_state() != wifi_manager::State::UNINITIALIZED &&
+                            wifi_.get_state() != wifi_manager::State::INITIALIZED) {
                             wifi_.disconnect(2000);
-                            wifi_.stop();
+                            wifi_.stop(2000);
                         }
                         system_hal_.restart();
                     }
