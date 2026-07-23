@@ -23,6 +23,21 @@
  *   - Entry [N-1].depth_cm to the real depth of the tank bottom from the
  *     drain level.
  * No changes to the interpolation algorithm are needed.
+ *
+ * ## Behavior Profile: Sensor Performance vs. Distance & Pump State
+ * ==============================================================================
+ * Distance   | Pump  | Tank State   | Error Rate | Avg StdDev | Confidence
+ * -----------+-------+--------------+------------+------------+----------------
+ * 30-60 cm   | ON    | Mostly Full  |    0.9%    |  0.63 cm   | Excellent
+ * 60-90 cm   | ON    | Half Full    |    0.0%    |  0.72 cm   | Perfect
+ * 90-120 cm  | ON    | Half Empty   |    4.5%    |  1.77 cm   | Good
+ * 120-150 cm | ON    | Mostly Empty |   21.1%    |  4.07 cm   | Acceptable (turb.)
+ *
+ * 90-120 cm  | OFF   | Draining     |    0.0%    |  0.19 cm   | Perfect
+ * 120-150 cm | OFF   | Draining     |    2.6%    |  0.85 cm   | Excellent
+ * ==============================================================================
+ * Conclusion: Issues only occur with Pump ON + Large Distance (waterfall effect).
+ *             Pump OFF: Excellent performance at any distance.
  */
 class TankGeometry
 {
