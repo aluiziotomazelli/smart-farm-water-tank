@@ -3,11 +3,6 @@
 #include "esp_sleep.h"
 #include "farm_protocol_types.hpp"
 
-// Define automatic OTA check configuration for testing
-#ifndef OTA_AUTOMATIC_CHECK_IN_TESTS
-#define OTA_AUTOMATIC_CHECK_IN_TESTS 0
-#endif
-
 static constexpr uint32_t RUN_LOOP_DELAY_MS = 10000;
 static constexpr uint32_t SENSOR_WARMUP_MS = 600;
 
@@ -109,19 +104,12 @@ void WaterTankApp::run()
             stats_.last_battery_mv);
 
         // 6. Transmit data to Hub
-        // send_report();
+        send_report();
 
         // 7. Listen for incoming commands (e.g. START_OTA) before sleeping
-        // listen_for_commands(LISTEN_WINDOW_MS);
+        listen_for_commands(LISTEN_WINDOW_MS);
 
         // 8. Wait if OTA is in progress
-#if defined(OTA_AUTOMATIC_CHECK_IN_TESTS) && OTA_AUTOMATIC_CHECK_IN_TESTS
-        if (!ota_controller_.is_busy()) {
-            ESP_LOGI(TAG, "Triggering automatic OTA check for this cycle...");
-            ota_controller_.on_ota_triggered(OtaTriggerSource::AUTOMATIC);
-        }
-#endif
-
         if (ota_controller_.is_busy()) {
             ESP_LOGW(TAG, "OTA in progress, waiting for completion...");
             while (ota_controller_.is_busy()) {
@@ -141,7 +129,7 @@ void WaterTankApp::run()
 
 esp_err_t WaterTankApp::send_report()
 {
-    WaterLevelReport report = {};
+    farm::WaterLevelReport report = {};
 
     report.level_permille = stats_.level_permille;
     report.distance_cm = stats_.last_distance_cm;
@@ -157,7 +145,7 @@ esp_err_t WaterTankApp::send_report()
 
     esp_err_t err = comm_.send_data(
         espnow::ReservedIds::HUB,
-        static_cast<uint8_t>(FarmPayloadType::WATER_LEVEL_REPORT),
+        static_cast<uint8_t>(farm::PayloadType::WATER_LEVEL_REPORT),
         &report,
         sizeof(report),
         true // require_ack
@@ -169,25 +157,25 @@ esp_err_t WaterTankApp::send_report()
     return err;
 }
 
-SensorStatus WaterTankApp::map_status(ultrasonic::UsResult result)
+farm::SensorStatus WaterTankApp::map_status(ultrasonic::UsResult result)
 {
     switch (result) {
     case ultrasonic::UsResult::OK:
-        return SensorStatus::OK;
+        return farm::SensorStatus::OK;
     case ultrasonic::UsResult::WEAK_SIGNAL:
-        return SensorStatus::WARNING_LOW_SIGNAL;
+        return farm::SensorStatus::WARNING_LOW_SIGNAL;
     case ultrasonic::UsResult::TIMEOUT:
-        return SensorStatus::ERROR_TIMEOUT;
+        return farm::SensorStatus::ERROR_TIMEOUT;
     case ultrasonic::UsResult::OUT_OF_RANGE:
-        return SensorStatus::ERROR_OUT_OF_RANGE;
+        return farm::SensorStatus::ERROR_OUT_OF_RANGE;
     case ultrasonic::UsResult::HIGH_VARIANCE:
     case ultrasonic::UsResult::INSUFFICIENT_SAMPLES:
-        return SensorStatus::ERROR_UNSTABLE;
+        return farm::SensorStatus::ERROR_UNSTABLE;
     case ultrasonic::UsResult::ECHO_STUCK:
     case ultrasonic::UsResult::HW_FAULT:
-        return SensorStatus::ERROR_HARDWARE;
+        return farm::SensorStatus::ERROR_HARDWARE;
     default:
-        return SensorStatus::UNKNOWN;
+        return farm::SensorStatus::UNKNOWN;
     }
 }
 

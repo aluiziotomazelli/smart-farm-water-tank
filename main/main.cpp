@@ -26,17 +26,13 @@
 #include "hal_timer.hpp"
 #include "hal_nvs.hpp"
 #include "hal_freertos.hpp"
+#include "farm_protocol_types.hpp"
 #include <cstdint>
 
 #include "freertos/ringbuf.h"
 #include "lwip/sockets.h"
 
 static const char* TAG = "main";
-
-// Define automatic OTA check configuration for testing
-#ifndef OTA_AUTOMATIC_CHECK_IN_TESTS
-#define OTA_AUTOMATIC_CHECK_IN_TESTS 0
-#endif
 
 // Production Configuration for XIAO-ESP32-C3 Mini Board
 static constexpr gpio_num_t POWER_GPIO = GPIO_NUM_10;        // D10
@@ -233,8 +229,8 @@ static esp_err_t setup_hardware()
 
     // EspNowManager
     espnow::EspNowConfig config;
-    config.node_id = static_cast<espnow::NodeId>(FarmNodeId::WATER_TANK);
-    config.node_type = static_cast<espnow::NodeType>(FarmNodeType::SENSOR);
+    config.node_id = static_cast<espnow::NodeId>(farm::NodeId::WATER_TANK);
+    config.node_type = static_cast<espnow::NodeType>(farm::NodeType::SENSOR);
     app_rx_queue = hal_freertos.queue_create(30, sizeof(espnow::AppMessage));
     config.app_rx_queue = app_rx_queue;
     config.wifi_channel = 1;
