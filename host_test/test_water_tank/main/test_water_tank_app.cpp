@@ -15,6 +15,7 @@
 #include "mock_i_ota_manager.hpp"
 #include "mock_hal_freertos.hpp"
 #include "mock_i_ota_trigger.hpp"
+#include "mock_hal_system.hpp"
 
 using ::testing::_;
 using ::testing::Return;
@@ -36,12 +37,13 @@ protected:
     testing::NiceMock<idf_hals::MockHalFreertos> mock_rtos;
     testing::NiceMock<MockOtaTrigger> mock_btn_trigger;
     testing::NiceMock<MockOtaTrigger> mock_espnow_trigger;
+    testing::NiceMock<idf_hals::MockSystemHAL> mock_system_hal;
     
     TankGeometry geometry{10}; // offset 10cm (uint8_t)
     WaterTankLogic logic{geometry, mock_float_switch};
     QueueHandle_t dummy_queue = nullptr;
     
-    WaterTankApp app{mock_sensor, mock_float_switch, mock_storage, mock_comm, dummy_queue, mock_power, mock_sleep, mock_battery, mock_sys_timer, mock_rtos, logic, mock_wifi, mock_ota, mock_btn_trigger, mock_espnow_trigger};
+    WaterTankApp app{mock_sensor, mock_float_switch, mock_storage, mock_comm, dummy_queue, mock_power, mock_sleep, mock_battery, mock_sys_timer, mock_rtos, logic, mock_wifi, mock_ota, mock_btn_trigger, mock_espnow_trigger, mock_system_hal};
 
     void SetUp() override {
         // Default behaviors

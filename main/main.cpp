@@ -21,6 +21,7 @@
 #include "hal_adc_oneshot.hpp"
 #include "hal_adc_calibration.hpp"
 #include "hal_sys_rom.hpp"
+#include "hal_system.hpp"
 #include "hal_gpio.hpp"
 #include "hal_timer.hpp"
 #include "hal_nvs.hpp"
@@ -47,6 +48,7 @@ static constexpr uint8_t PING_COUNT = 11; // Initial ping count per distance mea
 static idf_hals::GpioHAL hal_gpio;
 static idf_hals::TimerHAL hal_timer;
 static idf_hals::SysRomHAL hal_sys_rom;
+static idf_hals::SystemHAL hal_system;
 static idf_hals::NvsHAL nvs_hal;
 static idf_hals::HalFreertos hal_freertos;
 
@@ -317,7 +319,8 @@ extern "C" void app_main()
         wifi,
         ota_manager,
         btn_trigger,
-        espnow_ota_trigger);
+        espnow_ota_trigger,
+        hal_system);
 
     // Run the main application flow
     app.run();

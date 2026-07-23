@@ -15,6 +15,7 @@
 #include <atomic>
 #include "interfaces/i_ota_trigger.hpp"
 #include "interfaces/i_ota_manager.hpp"
+#include "interfaces/i_hal_system.hpp"
 
 /**
  * @class WaterTankApp
@@ -39,7 +40,8 @@ public:
         wifi_manager::IWiFiManager& wifi,
         IOtaManager& ota_manager,
         IOtaTrigger& btn_trigger,
-        IOtaTrigger& espnow_trigger);
+        IOtaTrigger& espnow_trigger,
+        idf_hals::ISystemHAL& system_hal);
 
     /**
      * @brief Execute the main application loop.
@@ -65,6 +67,7 @@ private:
     IOtaManager& ota_manager_;
     IOtaTrigger& btn_trigger_;
     IOtaTrigger& espnow_trigger_;
+    idf_hals::ISystemHAL& system_hal_;
 
     std::atomic<bool> ota_triggered_{false};
 
@@ -73,5 +76,5 @@ private:
     esp_err_t send_report();
     farm::SensorStatus map_status(ultrasonic::UsResult result);
     void enter_deep_sleep(uint64_t sleep_time_us);
-    void listen_for_commands(uint32_t timeout_ms);
+    uint64_t listen_for_commands(uint32_t timeout_ms);
 };
