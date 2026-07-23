@@ -1,4 +1,5 @@
 #include "water_tank_app.hpp"
+#include "esp_err.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
 #include "esp_system.h"
@@ -107,6 +108,10 @@ void WaterTankApp::run()
     // 7. Listen for incoming commands (e.g. START_OTA, SLEEP_OVERRIDE) before sleeping
     uint64_t override_sleep_us = listen_for_commands(LISTEN_WINDOW_MS);
 
+    if (ota_triggered_) {
+        process_pending_ota();
+    }
+
     uint64_t sleep_time_us = (override_sleep_us > 0) ? override_sleep_us : logic_.calculate_sleep_time_us(stats_);
     enter_deep_sleep(sleep_time_us);
 }
@@ -169,53 +174,6 @@ farm::SensorStatus WaterTankApp::map_status(ultrasonic::UsResult result)
 
 void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
 {
-    if (ota_triggered_) {
-        ESP_LOGI(TAG, "Processing pending OTA...");
-        bool wifi_ready = true;
-        bool connected_by_us = false;
-
-        if (wifi_.get_state() != wifi_manager::State::CONNECTED_GOT_IP) {
-            ESP_LOGI(TAG, "WiFi not connected. Connecting for OTA...");
-            if (wifi_.connect(OTA_WIFI_CONNECT_TIMEOUT_MS) == ESP_OK) {
-                connected_by_us = true;
-            } else {
-                ESP_LOGE(TAG, "Failed to connect to WiFi for OTA");
-                wifi_ready = false;
-            }
-        }
-
-        if (wifi_ready) {
-            ota_manager_.start_ota();
-            uint32_t elapsed_ms = 0;
-            OtaStatus status = ota_manager_.get_status();
-
-            while (status != OtaStatus::READY_TO_RESTART &&
-                   status != OtaStatus::FAILED &&
-                   elapsed_ms < OTA_WATCHDOG_TIMEOUT_MS) {
-                rtos_.task_delay(pdMS_TO_TICKS(500));
-                elapsed_ms += 500;
-                status = ota_manager_.get_status();
-            }
-
-            if (status == OtaStatus::READY_TO_RESTART) {
-                ESP_LOGI(TAG, "OTA completed. Disconnecting WiFi if connected and restarting safely.");
-                if (wifi_.get_state() != wifi_manager::State::UNINITIALIZED &&
-                    wifi_.get_state() != wifi_manager::State::INITIALIZED) {
-                    wifi_.disconnect(2000);
-                    wifi_.stop(2000);
-                }
-                system_hal_.restart();
-            } else {
-                ESP_LOGE(TAG, "OTA failed or timed out. Cancelling OTA.");
-                ota_manager_.cancel_ota();
-                if (connected_by_us) {
-                    ESP_LOGI(TAG, "Disconnecting WiFi connected by OTA...");
-                    wifi_.disconnect(2000);
-                }
-            }
-        }
-        ota_triggered_ = false;
-    }
 
     ESP_LOGI(TAG, "Entering deep sleep for %llu s", sleep_time_us / 1000000);
 
@@ -223,13 +181,7 @@ void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
     btn_trigger_.disarm();
     espnow_trigger_.disarm();
 
-    // Ensure WiFi is disconnected and stopped before deep sleep
-    if (wifi_.get_state() != wifi_manager::State::UNINITIALIZED &&
-        wifi_.get_state() != wifi_manager::State::INITIALIZED) {
-        ESP_LOGI(TAG, "Ensuring WiFi is disconnected and stopped before deep sleep...");
-        wifi_.disconnect(2000);
-        wifi_.stop(2000);
-    }
+    disconnect_stop_wifi();
 
     sleep_.disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
 
@@ -285,11 +237,7 @@ uint64_t WaterTankApp::listen_for_commands(uint32_t timeout_ms)
                     }
                     else if (cmd == espnow::CommandType::REBOOT) {
                         ESP_LOGW(TAG, "Received REBOOT command from Hub");
-                        if (wifi_.get_state() != wifi_manager::State::UNINITIALIZED &&
-                            wifi_.get_state() != wifi_manager::State::INITIALIZED) {
-                            wifi_.disconnect(2000);
-                            wifi_.stop(2000);
-                        }
+                        disconnect_stop_wifi();
                         system_hal_.restart();
                     }
                 }
@@ -301,7 +249,10 @@ uint64_t WaterTankApp::listen_for_commands(uint32_t timeout_ms)
                             farm::SleepOverrideCommand sleep_cmd{};
                             memcpy(&sleep_cmd, msg.payload, sizeof(sleep_cmd));
                             override_sleep_us = static_cast<uint64_t>(sleep_cmd.sleep_time_s) * 1000000ULL;
-                            ESP_LOGI(TAG, "Received SLEEP_OVERRIDE: %lu s", static_cast<unsigned long>(sleep_cmd.sleep_time_s));
+                            ESP_LOGI(
+                                TAG,
+                                "Received SLEEP_OVERRIDE: %lu s",
+                                static_cast<unsigned long>(sleep_cmd.sleep_time_s));
                             break;
                         }
                     }
@@ -311,4 +262,68 @@ uint64_t WaterTankApp::listen_for_commands(uint32_t timeout_ms)
     }
 
     return override_sleep_us;
+}
+
+void WaterTankApp::process_pending_ota()
+{
+    ESP_LOGI(TAG, "Processing pending OTA...");
+    bool wifi_ready = true;
+    bool connected_by_us = false;
+
+    if (wifi_.get_state() != wifi_manager::State::CONNECTED_GOT_IP) {
+        ESP_LOGI(TAG, "WiFi not connected. Connecting for OTA...");
+        if (wifi_.connect(OTA_WIFI_CONNECT_TIMEOUT_MS) == ESP_OK) {
+            connected_by_us = true;
+        }
+        else {
+            ESP_LOGE(TAG, "Failed to connect to WiFi for OTA");
+            wifi_ready = false;
+        }
+    }
+
+    if (wifi_ready) {
+        ota_manager_.start_ota();
+        uint32_t elapsed_ms = 0;
+        OtaStatus status = ota_manager_.get_status();
+
+        while (status != OtaStatus::READY_TO_RESTART && status != OtaStatus::FAILED &&
+               elapsed_ms < OTA_WATCHDOG_TIMEOUT_MS) {
+            rtos_.task_delay(pdMS_TO_TICKS(500));
+            elapsed_ms += 500;
+            status = ota_manager_.get_status();
+        }
+
+        if (status == OtaStatus::READY_TO_RESTART) {
+            ESP_LOGI(TAG, "OTA completed. Disconnecting WiFi if connected and restarting safely.");
+            disconnect_stop_wifi();
+            system_hal_.restart();
+        }
+        else {
+            ESP_LOGE(TAG, "OTA failed or timed out. Cancelling OTA.");
+            ota_manager_.cancel_ota();
+            if (connected_by_us) {
+                ESP_LOGI(TAG, "Disconnecting WiFi connected by OTA...");
+                wifi_.disconnect(2000);
+            }
+        }
+    }
+    ota_triggered_ = false;
+}
+
+esp_err_t WaterTankApp::disconnect_stop_wifi()
+{
+    esp_err_t ret = ESP_OK;
+    if (wifi_.get_state() != wifi_manager::State::UNINITIALIZED &&
+        wifi_.get_state() != wifi_manager::State::INITIALIZED) {
+        ESP_LOGI(TAG, "Ensuring WiFi is disconnected and stopped...");
+        ret = wifi_.disconnect(2000);
+        if (ret != ESP_OK) {
+            return ret;
+        }
+        ret = wifi_.stop(2000);
+        if (ret != ESP_OK) {
+            return ret;
+        }
+    }
+    return ret;
 }

@@ -77,4 +77,6 @@ private:
     farm::SensorStatus map_status(ultrasonic::UsResult result);
     void enter_deep_sleep(uint64_t sleep_time_us);
     uint64_t listen_for_commands(uint32_t timeout_ms);
+    void process_pending_ota();
+    esp_err_t disconnect_stop_wifi();
 };
