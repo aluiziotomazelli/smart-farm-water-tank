@@ -40,7 +40,6 @@ WaterTankApp::WaterTankApp(
 
 void WaterTankApp::run()
 {
-    while (true) {
         // ESP_LOGI(TAG, "Starting application flow");
 
         // Power on sensor and wait for warmup
@@ -97,11 +96,12 @@ void WaterTankApp::run()
 
         ESP_LOGI(
             TAG,
-            "Distance: %.1f - UsResult %d - Permile: %d | Battery: %d",
+            "Distance: %.1f - UsResult %d - Permile: %d | Battery: %d | FillState: %d",
             reading.cm,
             static_cast<int>(reading.result),
             stats_.level_permille,
-            stats_.last_battery_mv);
+            stats_.last_battery_mv,
+            static_cast<int>(stats_.fill_state));
 
         // 6. Transmit data to Hub
         send_report();
@@ -118,9 +118,8 @@ void WaterTankApp::run()
             ESP_LOGI(TAG, "OTA finished (failed/cancelled). Continuing loop.");
         }
 
-        // 9. Delay before next run iteration
-        rtos_.task_delay(pdMS_TO_TICKS(RUN_LOOP_DELAY_MS));
-    }
+    uint64_t sleep_time_us = logic_.calculate_sleep_time_us(stats_);
+    enter_deep_sleep(sleep_time_us);
 }
 
 // =====================================================================
@@ -136,7 +135,9 @@ esp_err_t WaterTankApp::send_report()
     report.battery_mv = stats_.last_battery_mv;
     report.battery_percent = stats_.last_battery_percent;
     report.battery_state = stats_.last_battery_state;
-    report.status = map_status(stats_.last_result);
+    uint8_t status_val = static_cast<uint8_t>(map_status(stats_.last_result));
+    status_val = (status_val == 0xFF) ? 0x0F : (status_val & 0x0F);
+    report.status = static_cast<farm::SensorStatus>(status_val | (static_cast<uint8_t>(stats_.fill_state) << 4));
 
     report.float_switch_is_full = float_switch_.is_tank_full();
     report.backup_mode_active = stats_.backup_mode_active;
