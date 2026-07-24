@@ -105,8 +105,8 @@ void WaterTankApp::run()
     // 6. Transmit data to Hub
     send_report();
 
-    // 7. Listen for incoming commands (e.g. START_OTA, SLEEP_OVERRIDE) before sleeping
-    uint64_t override_sleep_us = listen_for_commands(LISTEN_WINDOW_MS);
+    // 7. Listen for incoming messages (e.g. START_OTA, SLEEP_OVERRIDE) before sleeping
+    uint64_t override_sleep_us = listen_for_messages(LISTEN_WINDOW_MS);
 
     if (ota_triggered_) {
         process_pending_ota();
@@ -207,7 +207,7 @@ void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
     sleep_.deep_sleep_start();
 }
 
-uint64_t WaterTankApp::listen_for_commands(uint32_t timeout_ms)
+uint64_t WaterTankApp::listen_for_messages(uint32_t timeout_ms)
 {
     uint64_t override_sleep_us = 0;
 
@@ -226,42 +226,50 @@ uint64_t WaterTankApp::listen_for_commands(uint32_t timeout_ms)
 
         if (rtos_.queue_receive(rx_queue_, &msg, pdMS_TO_TICKS(remaining)) == pdPASS) {
             if (msg.msg_type == espnow::MessageType::COMMAND) {
-                const auto payload_type = msg.payload_type;
-
-                // Generic transport commands (0x01–0x3F)
-                if (payload_type <= 0x3F) {
-                    auto cmd = static_cast<espnow::CommandType>(payload_type);
-                    if (cmd == espnow::CommandType::START_OTA) {
-                        ESP_LOGW(TAG, "Received START_OTA command from Hub - triggering OTA");
-                        static_cast<EspNowOtaTrigger&>(espnow_trigger_).notify();
-                    }
-                    else if (cmd == espnow::CommandType::REBOOT) {
-                        ESP_LOGW(TAG, "Received REBOOT command from Hub");
-                        disconnect_stop_wifi();
-                        system_hal_.restart();
-                    }
-                }
-                // Farm application commands (0x40–0xFF)
-                else {
-                    auto cmd = static_cast<farm::CommandType>(payload_type);
-                    if (cmd == farm::CommandType::SLEEP_OVERRIDE) {
-                        if (msg.payload_len >= sizeof(farm::SleepOverrideCommand)) {
-                            farm::SleepOverrideCommand sleep_cmd{};
-                            memcpy(&sleep_cmd, msg.payload, sizeof(sleep_cmd));
-                            override_sleep_us = static_cast<uint64_t>(sleep_cmd.sleep_time_s) * 1000000ULL;
-                            ESP_LOGI(
-                                TAG,
-                                "Received SLEEP_OVERRIDE: %lu s",
-                                static_cast<unsigned long>(sleep_cmd.sleep_time_s));
-                            break;
-                        }
-                    }
+                if (process_command(msg, override_sleep_us)) {
+                    break;
                 }
             }
         }
     }
 
     return override_sleep_us;
+}
+
+bool WaterTankApp::process_command(const espnow::AppMessage& msg, uint64_t& out_override_sleep_us)
+{
+    const auto payload_type = msg.payload_type;
+
+    // Generic transport commands (0x01–0x3F)
+    if (payload_type <= 0x3F) {
+        auto cmd = static_cast<espnow::CommandType>(payload_type);
+        if (cmd == espnow::CommandType::START_OTA) {
+            ESP_LOGW(TAG, "Received START_OTA command from Hub - triggering OTA");
+            static_cast<EspNowOtaTrigger&>(espnow_trigger_).notify();
+        }
+        else if (cmd == espnow::CommandType::REBOOT) {
+            ESP_LOGW(TAG, "Received REBOOT command from Hub");
+            disconnect_stop_wifi();
+            system_hal_.restart();
+        }
+    }
+    // Farm application commands (0x40–0xFF)
+    else {
+        auto cmd = static_cast<farm::CommandType>(payload_type);
+        if (cmd == farm::CommandType::SLEEP_OVERRIDE) {
+            if (msg.payload_len >= sizeof(farm::SleepOverrideCommand)) {
+                farm::SleepOverrideCommand sleep_cmd{};
+                memcpy(&sleep_cmd, msg.payload, sizeof(sleep_cmd));
+                out_override_sleep_us = static_cast<uint64_t>(sleep_cmd.sleep_time_s) * 1000000ULL;
+                ESP_LOGI(
+                    TAG,
+                    "Received SLEEP_OVERRIDE: %lu s",
+                    static_cast<unsigned long>(sleep_cmd.sleep_time_s));
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 void WaterTankApp::process_pending_ota()
