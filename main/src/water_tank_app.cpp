@@ -81,10 +81,7 @@ void WaterTankApp::run()
     logic_.process_reading(reading, stats_);
     logic_.update_operation_mode(stats_);
 
-    // 4. Save updated state
-    storage_.save(stats_);
-
-    // 5. Read battery status
+    // 4. Read battery status
     if (battery_monitor_.init() == ESP_OK) {
         battery_monitor::BatteryReading bat_reading;
         if (battery_monitor_.read(bat_reading) == ESP_OK) {
@@ -102,10 +99,10 @@ void WaterTankApp::run()
         stats_.last_battery_mv,
         static_cast<int>(stats_.fill_state));
 
-    // 6. Transmit data to Hub
+    // 5. Transmit data to Hub
     send_report();
 
-    // 7. Listen for incoming messages (e.g. START_OTA, SLEEP_OVERRIDE) before sleeping
+    // 6. Listen for incoming messages (e.g. START_OTA, SLEEP_OVERRIDE) before sleeping
     uint64_t override_sleep_us = listen_for_messages(LISTEN_WINDOW_MS);
 
     if (ota_triggered_) {
@@ -113,6 +110,16 @@ void WaterTankApp::run()
     }
 
     uint64_t sleep_time_us = (override_sleep_us > 0) ? override_sleep_us : logic_.calculate_sleep_time_us(stats_);
+
+    // 7. Determine GPIO wakeup status to save in NVS
+    stats_.gpio_wakeup_enabled = float_switch_.should_enable_wakeup();
+
+    // 8. Save updated state (Single NVS write)
+    if (storage_.save(stats_) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to save stats to storage");
+    }
+
+    // 9. Enter deep sleep
     enter_deep_sleep(sleep_time_us);
 }
 
@@ -174,7 +181,6 @@ farm::SensorStatus WaterTankApp::map_status(ultrasonic::UsResult result)
 
 void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
 {
-
     ESP_LOGI(TAG, "Entering deep sleep for %llu s", sleep_time_us / 1000000);
 
     // Disarm triggers before going to sleep
@@ -185,8 +191,9 @@ void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
 
     sleep_.disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
 
-    stats_.gpio_wakeup_enabled = false;
-    if (float_switch_.should_enable_wakeup()) {
+    bool wakeup_configured = false;
+
+    if (stats_.gpio_wakeup_enabled) {
         int gpio_num;
         bool wake_high;
         if (float_switch_.get_wakeup_config(gpio_num, wake_high) == ESP_OK) {
@@ -194,14 +201,28 @@ void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
             idf_hals::GpioWakeupMode mode =
                 wake_high ? idf_hals::GpioWakeupMode::HIGH_LEVEL : idf_hals::GpioWakeupMode::LOW_LEVEL;
             if (sleep_.deep_sleep_enable_gpio_wakeup(pin_mask, mode) == ESP_OK) {
-                stats_.gpio_wakeup_enabled = true;
+                wakeup_configured = true;
                 ESP_LOGI(TAG, "GPIO wakeup enabled on pin %d (wake_on_high=%d)", gpio_num, wake_high);
+            }
+            else {
+                ESP_LOGE(TAG, "Failed to enable GPIO wakeup!");
             }
         }
     }
 
     if (sleep_time_us > 0) {
-        sleep_.enable_timer_wakeup(sleep_time_us);
+        if (sleep_.enable_timer_wakeup(sleep_time_us) == ESP_OK) {
+            wakeup_configured = true;
+        }
+        else {
+            ESP_LOGE(TAG, "Failed to enable timer wakeup!");
+        }
+    }
+
+    if (!wakeup_configured) {
+        ESP_LOGE(TAG, "No wakeup sources could be configured! Restarting system to prevent permanent sleep.");
+        system_hal_.restart();
+        return;
     }
 
     sleep_.deep_sleep_start();
@@ -261,10 +282,7 @@ bool WaterTankApp::process_command(const espnow::AppMessage& msg, uint64_t& out_
                 farm::SleepOverrideCommand sleep_cmd{};
                 memcpy(&sleep_cmd, msg.payload, sizeof(sleep_cmd));
                 out_override_sleep_us = static_cast<uint64_t>(sleep_cmd.sleep_time_s) * 1000000ULL;
-                ESP_LOGI(
-                    TAG,
-                    "Received SLEEP_OVERRIDE: %lu s",
-                    static_cast<unsigned long>(sleep_cmd.sleep_time_s));
+                ESP_LOGI(TAG, "Received SLEEP_OVERRIDE: %lu s", static_cast<unsigned long>(sleep_cmd.sleep_time_s));
                 return true;
             }
         }
