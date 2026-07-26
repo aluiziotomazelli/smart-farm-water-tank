@@ -12,6 +12,7 @@ list(APPEND EXTRA_COMPONENT_DIRS
     "../../components/battery_monitor"
     "../../components/idf_hals"
     "../../components/ota_manager"
+    "../../components/time_manager"
     "../common"
     "../gtest"
     
@@ -33,6 +34,7 @@ set(COMPONENTS
     "battery_monitor"
     "idf_hals"
     "ota_manager"
+    "time_manager"
     "wifi_manager"
     "esp_timer"
 )

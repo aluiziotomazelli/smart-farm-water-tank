@@ -52,4 +52,34 @@ struct WaterTankStats
     farm::BatteryState last_battery_state = farm::BatteryState::UNKNOWN;
 
     void reset() { *this = {}; }
+
+    bool operator==(const WaterTankStats &other) const
+    {
+        return level_permille == other.level_permille &&
+               last_level_permille == other.last_level_permille &&
+               fill_state == other.fill_state &&
+               last_distance_cm == other.last_distance_cm &&
+               last_result == other.last_result &&
+               sample_uptime_s == other.sample_uptime_s &&
+               measure_count == other.measure_count &&
+               ok_count == other.ok_count &&
+               weak_count == other.weak_count &&
+               timeout_count == other.timeout_count &&
+               out_of_range_count == other.out_of_range_count &&
+               high_variance_count == other.high_variance_count &&
+               insufficient_samples_count == other.insufficient_samples_count &&
+               echo_stuck_count == other.echo_stuck_count &&
+               hw_fault_count == other.hw_fault_count &&
+               gpio_wakeup_enabled == other.gpio_wakeup_enabled &&
+               backup_mode_active == other.backup_mode_active &&
+               consecutive_failures == other.consecutive_failures &&
+               last_battery_mv == other.last_battery_mv &&
+               last_battery_percent == other.last_battery_percent &&
+               last_battery_state == other.last_battery_state;
+    }
+
+    bool operator!=(const WaterTankStats &other) const
+    {
+        return !(*this == other);
+    }
 };

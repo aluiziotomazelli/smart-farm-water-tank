@@ -30,6 +30,8 @@ idf_component_register(
         nvs_core
         battery_monitor
         idf_hals
+        ota_manager
+        time_manager
         WHOLE_ARCHIVE
 )
 

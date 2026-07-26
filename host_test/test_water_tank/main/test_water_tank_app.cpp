@@ -73,18 +73,18 @@ TEST_F(WaterTankAppTest, Run_ExecutesFullOrchestrationFlow) {
     // 3. Turn off power (Energy saving)
     EXPECT_CALL(mock_power, turn_off()).Times(1);
 
-    // 4. Save state
-    EXPECT_CALL(mock_storage, save(_)).Times(1);
-
-    // 5. Read battery status
+    // 4. Read battery status
     EXPECT_CALL(mock_battery, init()).Times(1);
     EXPECT_CALL(mock_battery, read(_)).Times(1);
     EXPECT_CALL(mock_battery, deinit()).Times(1);
 
-    // 6. Transmit data
+    // 5. Transmit data
     EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).WillOnce(Return(ESP_OK));
 
-    // 6. Enter deep sleep
+    // 6. Save state
+    EXPECT_CALL(mock_storage, save(_)).Times(1);
+
+    // 7. Enter deep sleep
     EXPECT_CALL(mock_sleep, disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL)).Times(1);
     EXPECT_CALL(mock_sleep, enable_timer_wakeup(_)).Times(1);
     EXPECT_CALL(mock_sleep, deep_sleep_start()).Times(1);
