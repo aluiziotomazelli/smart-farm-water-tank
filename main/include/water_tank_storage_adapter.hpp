@@ -23,7 +23,7 @@ public:
     esp_err_t save(const WaterTankStats &stats) override
     {
         nvs_.stats = stats;
-        return nvs_.commit();
+        return nvs_.save();
     }
 
     void reset_to_defaults(WaterTankStats &stats) override

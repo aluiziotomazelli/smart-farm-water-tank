@@ -18,5 +18,6 @@ idf_component_register(
         wifi_manager
         ota_manager
         battery_monitor
+        time_manager
         idf_hals
 )

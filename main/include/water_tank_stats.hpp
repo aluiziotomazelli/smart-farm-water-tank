@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core_types.hpp"
+#include "farm_protocol_types.hpp"
 #include "us_types.hpp"
 #include "water_tank_types.hpp"
 

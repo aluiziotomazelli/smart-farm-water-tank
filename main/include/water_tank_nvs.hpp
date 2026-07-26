@@ -16,7 +16,7 @@ public:
     WaterTankStats stats;
 
 protected:
-    esp_err_t loadAppData() override;
-    esp_err_t saveAppData() override;
-    void setAppDefaults() override;
+    esp_err_t load_app_data() override;
+    esp_err_t save_app_data(bool force_nvs = false) override;
+    void set_app_defaults() override;
 };
