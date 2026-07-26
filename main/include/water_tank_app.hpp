@@ -87,4 +87,10 @@ private:
     void process_pending_ota();
     esp_err_t disconnect_stop_wifi();
     bool process_command(const espnow::AppMessage& msg, uint64_t& out_override_sleep_us);
+
+    esp_err_t init_wifi();
+    esp_err_t init_espnow();
+    esp_err_t init_ota_manager();
+    void check_firmware();
+    void init_logger();
 };

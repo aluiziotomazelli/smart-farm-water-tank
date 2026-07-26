@@ -61,15 +61,7 @@ esp_err_t WaterTankApp::init(bool is_logging)
     esp_err_t err;
 
     // 1. WifiManager initialization
-    if ((err = wifi_.init()) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize WiFiManager: %s", esp_err_to_name(err));
-        return err;
-    }
-    if ((err = wifi_.add_credentials(WIFI_SSID, WIFI_PASS)) != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to set WiFi credentials: %s", esp_err_to_name(err));
-    }
-    if ((err = wifi_.start()) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start WiFiManager: %s", esp_err_to_name(err));
+    if ((err = init_wifi()) != ESP_OK) {
         return err;
     }
 
@@ -80,20 +72,13 @@ esp_err_t WaterTankApp::init(bool is_logging)
     }
 
     // 3. Storage / NVS Data load
-    if (storage_.load(stats_) != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to load storage, using defaults");
+    if ((err = storage_.load(stats_)) != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to load storage: %s, using defaults", esp_err_to_name(err));
         storage_.reset_to_defaults(stats_);
     }
 
     // 4. EspNowManager initialization
-    espnow::EspNowConfig config;
-    config.node_id = static_cast<espnow::NodeId>(farm::NodeId::WATER_TANK);
-    config.node_type = static_cast<espnow::NodeType>(farm::NodeType::SENSOR);
-    config.app_rx_queue = rx_queue_;
-    config.wifi_channel = 1;
-    config.heartbeat_interval_ms = 0;
-    if ((err = comm_.init(config)) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize EspNowManager: %s", esp_err_to_name(err));
+    if ((err = init_espnow()) != ESP_OK) {
         return err;
     }
 
@@ -111,43 +96,18 @@ esp_err_t WaterTankApp::init(bool is_logging)
     }
 
     // 7. OTA Manager initialization
-    OtaConfig ota_config{
-        .device_type = "water_tank",
-        .manifest_url = SERVER_URL,
-        .task_stack_size = 8192,
-        .task_priority = 5,
-        .transport = {.manifest_timeout_ms = 30000, .firmware_timeout_ms = 30000},
-        .security = {.allow_http_during_development = true},
-        .allow_same_version = false,
-        .restart_on_success = false,
-    };
-    if (!ota_manager_.init(ota_config)) {
-        ESP_LOGE(TAG, "Failed to initialize OTA Manager");
-        return ESP_FAIL;
+    if ((err = init_ota_manager()) != ESP_OK) {
+        return err;
     }
 
     // 8. Check pending OTA verification if any
     if (ota_manager_.check_pending_verify()) {
-        ESP_LOGI(TAG, "New firmware pending verification. Confirming as valid.");
-        if (ota_manager_.confirm_app_valid()) {
-            ESP_LOGI(TAG, "Firmware confirmed successfully.");
-        }
-        else {
-            ESP_LOGE(TAG, "Failed to confirm firmware. Triggering rollback.");
-            ota_manager_.rollback_and_reboot();
-        }
+        check_firmware();
     }
 
     // 9. Configure WiFi & Remote UDP Logging if requested
     if (is_logging) {
-        ESP_LOGI(TAG, "Connecting to WiFi synchronously for remote logging...");
-        if ((err = wifi_.connect(15000)) != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to connect to WiFi for logging: %s", esp_err_to_name(err));
-        }
-        else {
-            comm_.set_channel_policy(espnow::ChannelPolicy::FIXED);
-            udp_logger::init("192.168.1.23", 4444);
-        }
+        init_logger();
     }
 
     return ESP_OK;
@@ -444,4 +404,92 @@ esp_err_t WaterTankApp::disconnect_stop_wifi()
         }
     }
     return ret;
+}
+
+// =============================================================================
+// Init Helpers
+// =============================================================================
+
+esp_err_t WaterTankApp::init_wifi()
+{
+    esp_err_t err;
+    if ((err = wifi_.init()) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize WiFiManager: %s", esp_err_to_name(err));
+        return err;
+    }
+    if ((err = wifi_.add_credentials(WIFI_SSID, WIFI_PASS)) != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set WiFi credentials: %s", esp_err_to_name(err));
+    }
+    if ((err = wifi_.start()) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start WiFiManager: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t WaterTankApp::init_espnow()
+{
+    espnow::EspNowConfig config;
+    config.node_id = static_cast<espnow::NodeId>(farm::NodeId::WATER_TANK);
+    config.node_type = static_cast<espnow::NodeType>(farm::NodeType::SENSOR);
+    config.app_rx_queue = rx_queue_;
+    config.wifi_channel = 1;
+    config.heartbeat_interval_ms = 0;
+
+    esp_err_t err;
+    if ((err = comm_.init(config)) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize EspNowManager: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t WaterTankApp::init_ota_manager()
+{
+    OtaConfig ota_config{
+        .device_type = "water_tank",
+        .manifest_url = SERVER_URL,
+        .task_stack_size = 8192,
+        .task_priority = 5,
+        .transport = {.manifest_timeout_ms = 30000, .firmware_timeout_ms = 30000},
+        .security = {.allow_http_during_development = true},
+        .allow_same_version = false,
+        .restart_on_success = false,
+    };
+
+    if (!ota_manager_.init(ota_config)) {
+        ESP_LOGE(TAG, "Failed to initialize OTA Manager");
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
+void WaterTankApp::check_firmware()
+{
+    ESP_LOGI(TAG, "New firmware pending verification. Confirming as valid.");
+    if (ota_manager_.confirm_app_valid()) {
+        ESP_LOGI(TAG, "Firmware confirmed successfully.");
+    }
+    else {
+        ESP_LOGE(TAG, "Failed to confirm firmware. Triggering rollback.");
+        disconnect_stop_wifi();
+        ota_manager_.rollback_and_reboot();
+    }
+}
+
+void WaterTankApp::init_logger()
+{
+    ESP_LOGI(TAG, "Connecting to WiFi synchronously for remote logging...");
+
+    esp_err_t err;
+    if ((err = wifi_.connect(15000)) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to connect to WiFi for logging: %s", esp_err_to_name(err));
+    }
+    else {
+        comm_.set_channel_policy(espnow::ChannelPolicy::FIXED);
+        udp_logger::init("192.168.1.23", 4444);
+    }
 }
