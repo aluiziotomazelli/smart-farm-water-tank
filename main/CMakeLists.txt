@@ -20,4 +20,5 @@ idf_component_register(
         battery_monitor
         time_manager
         idf_hals
+        udp_logger
 )

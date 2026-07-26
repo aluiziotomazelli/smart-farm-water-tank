@@ -44,6 +44,12 @@ public:
         idf_hals::ISystemHAL& system_hal);
 
     /**
+     * @brief Initialize application state, dependencies and check OTA status.
+     * @return ESP_OK if initialization succeeded.
+     */
+    esp_err_t init();
+
+    /**
      * @brief Execute the main application loop.
      */
     void run();

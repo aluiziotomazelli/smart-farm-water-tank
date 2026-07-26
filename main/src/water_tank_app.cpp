@@ -53,23 +53,38 @@ void WaterTankApp::on_ota_triggered(OtaTriggerSource source)
     ota_triggered_ = true;
 }
 
+esp_err_t WaterTankApp::init()
+{
+    // 1. Load state and statistics from persistent storage
+    if (storage_.load(stats_) != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to load storage, using defaults");
+        storage_.reset_to_defaults(stats_);
+    }
+
+    // 2. Check pending OTA verification if any
+    if (ota_manager_.check_pending_verify()) {
+        ESP_LOGI(TAG, "New firmware pending verification. Confirming as valid.");
+        if (ota_manager_.confirm_app_valid()) {
+            ESP_LOGI(TAG, "Firmware confirmed successfully.");
+        }
+        else {
+            ESP_LOGE(TAG, "Failed to confirm firmware. Triggering rollback.");
+            ota_manager_.rollback_and_reboot();
+        }
+    }
+
+    return ESP_OK;
+}
+
 void WaterTankApp::run()
 {
     // Arm triggers for OTA
     btn_trigger_.arm(*this);
     espnow_trigger_.arm(*this);
 
-    // ESP_LOGI(TAG, "Starting application flow");
-
     // Power on sensor and wait for warmup
     power_.turn_on();
     rtos_.task_delay(pdMS_TO_TICKS(SENSOR_WARMUP_MS));
-
-    // 1. Load state and statistics from persistent storage
-    if (storage_.load(stats_) != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to load storage, using defaults");
-        storage_.reset_to_defaults(stats_);
-    }
 
     // 2. Perform sensor reading
     ultrasonic::Reading reading = sensor_.read_level();

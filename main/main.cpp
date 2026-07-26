@@ -143,49 +143,7 @@ static OtaManager ota_manager(ota_deps);
 static ButtonOtaTrigger btn_trigger(hal_gpio, hal_freertos, BOOT_BUTTON_GPIO, 200);
 static EspNowOtaTrigger espnow_ota_trigger;
 
-// UDP Remote Logging config and functions
-static const char* LOG_DEST_IP = "192.168.1.23"; // TODO: Adjust to your server ip
-static constexpr uint32_t LOG_DEST_PORT = 4444;
-static RingbufHandle_t log_ringbuf = nullptr;
-static vprintf_like_t original_vprintf = nullptr;
-static int udp_sock = -1;
-static struct sockaddr_in dest_addr;
-
-static int udp_log_vprintf(const char* fmt, va_list args)
-{
-    char buf[256];
-    int len = vsnprintf(buf, sizeof(buf), fmt, args);
-
-    if (len > 0) {
-        if (log_ringbuf != nullptr) {
-            xRingbufferSend(log_ringbuf, buf, len, 0);
-        }
-    }
-
-    if (original_vprintf != nullptr) {
-        return original_vprintf(fmt, args);
-    }
-    return len;
-}
-
-static void udp_log_sender_task(void* pvParameters)
-{
-    udp_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
-    dest_addr.sin_addr.s_addr = inet_addr(LOG_DEST_IP);
-    dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(LOG_DEST_PORT);
-
-    while (true) {
-        size_t item_size = 0;
-        char* item = (char*)xRingbufferReceive(log_ringbuf, &item_size, portMAX_DELAY);
-        if (item != nullptr) {
-            if (udp_sock >= 0) {
-                sendto(udp_sock, item, item_size, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
-            }
-            vRingbufferReturnItem(log_ringbuf, (void*)item);
-        }
-    }
-}
+#include "udp_logger.hpp"
 
 // Setup Hardware
 static QueueHandle_t app_rx_queue = nullptr;
@@ -266,12 +224,7 @@ static esp_err_t setup_hardware()
     espnow.set_channel_policy(espnow::ChannelPolicy::FIXED);
 
     // Initialize UDP Remote Logger after WiFi connection is active
-    log_ringbuf = xRingbufferCreate(8192, RINGBUF_TYPE_NOSPLIT);
-    if (log_ringbuf != nullptr) {
-        xTaskCreate(udp_log_sender_task, "udp_log_tx", 3072, nullptr, 3, nullptr);
-        original_vprintf = esp_log_set_vprintf(&udp_log_vprintf);
-        ESP_LOGI(TAG, "UDP Remote Logging initialized to %s:%u", LOG_DEST_IP, LOG_DEST_PORT);
-    }
+    udp_logger::init("192.168.1.23", 4444);
 
     return ESP_OK;
 }
@@ -291,18 +244,6 @@ extern "C" void app_main()
     auto& wifi = wifi_manager::WiFiManager::get_instance();
     auto& espnow = espnow::EspNowManager::instance();
 
-    // Verify rollback state on boot
-    if (ota_manager.check_pending_verify()) {
-        ESP_LOGI(TAG, "New firmware pending verification. Confirming as valid.");
-        if (ota_manager.confirm_app_valid()) {
-            ESP_LOGI(TAG, "Firmware confirmed successfully.");
-        }
-        else {
-            ESP_LOGE(TAG, "Failed to confirm firmware. Triggering rollback.");
-            ota_manager.rollback_and_reboot();
-        }
-    }
-
     // Instantiate app with dependencies
     WaterTankApp app(
         sensor_adapter,
@@ -321,6 +262,11 @@ extern "C" void app_main()
         btn_trigger,
         espnow_ota_trigger,
         hal_system);
+
+    // Initialize application state
+    if (app.init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize WaterTankApp");
+    }
 
     // Run the main application flow
     app.run();

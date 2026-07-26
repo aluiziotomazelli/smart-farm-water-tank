@@ -89,6 +89,7 @@ TEST_F(WaterTankAppTest, Run_ExecutesFullOrchestrationFlow) {
     EXPECT_CALL(mock_sleep, enable_timer_wakeup(_)).Times(1);
     EXPECT_CALL(mock_sleep, deep_sleep_start()).Times(1);
     
+    app.init();
     app.run();
 }
 
@@ -96,6 +97,8 @@ TEST_F(WaterTankAppTest, Run_HandlesStorageLoadFailure) {
     EXPECT_CALL(mock_storage, load(_)).WillOnce(Return(ESP_FAIL));
     EXPECT_CALL(mock_storage, reset_to_defaults(_)).Times(1);
     
+    app.init();
+
     // Continue the rest of the flow
     EXPECT_CALL(mock_sensor, read_level()).WillOnce(Return(ultrasonic::Reading{ultrasonic::UsResult::OK, 100.0f}));
     EXPECT_CALL(mock_power, turn_off()).Times(1);
