@@ -15,6 +15,12 @@ public:
     virtual ~ILevelSensor() = default;
 
     /**
+     * @brief Initializes the sensor hardware if required.
+     * @return ESP_OK on success.
+     */
+    virtual esp_err_t init() { return ESP_OK; }
+
+    /**
      * @brief Reads the distance or level from the sensor.
      *
      * @return ultrasonic::Reading containing the distance in cm and the result status.

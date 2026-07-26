@@ -145,87 +145,17 @@ static EspNowOtaTrigger espnow_ota_trigger;
 
 #include "udp_logger.hpp"
 
-// Setup Hardware
-static QueueHandle_t app_rx_queue = nullptr;
-static esp_err_t setup_hardware()
-{
-    esp_err_t err;
-
-    // WifiManager
-    wifi_manager::WiFiManager& wifi = wifi_manager::WiFiManager::get_instance();
-    if ((err = wifi.init()) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize WiFiManager: %s", esp_err_to_name(err));
-        return err;
-    }
-    // Before wifi.start() — define the credentials for OTA
-    if ((err = wifi.add_credentials(WIFI_SSID, WIFI_PASS)) != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to set WiFi credentials: %s", esp_err_to_name(err));
-        // not fatal: credentials may already be in NVS
-    }
-    if ((err = wifi.start()) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start WiFiManager: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    // FloatSwitch
-    if ((err = float_switch.init()) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize FloatSwitch: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    // NVS
-    if ((err = nvs.init_partition()) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize NVS partition: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    // EspNowManager
-    espnow::EspNowConfig config;
-    config.node_id = static_cast<espnow::NodeId>(farm::NodeId::WATER_TANK);
-    config.node_type = static_cast<espnow::NodeType>(farm::NodeType::SENSOR);
-    app_rx_queue = hal_freertos.queue_create(30, sizeof(espnow::AppMessage));
-    config.app_rx_queue = app_rx_queue;
-    config.wifi_channel = 1;
-    config.heartbeat_interval_ms = 0;
-
-    espnow::EspNowManager& espnow = espnow::EspNowManager::instance();
-    if ((err = espnow.init(config)) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize EspNowManager: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    // PowerControl
-    if ((err = power.init()) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize PowerControl: %s", esp_err_to_name(err));
-        return err;
-    }
-    power.turn_on();
-
-    // UsSensor
-    if ((err = sensor_us.init()) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize UsSensor: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    // OTA Manager
-    if (!ota_manager.init(ota_config)) {
-        ESP_LOGE(TAG, "Failed to initialize OTA Manager");
-        return ESP_FAIL;
-    }
-
-    return ESP_OK;
-}
-
 extern "C" void app_main()
 {
     ESP_LOGI(TAG, "Initializing Smart Farm Water Tank...");
 
-    if (setup_hardware() != ESP_OK) {
-        ESP_LOGE(TAG, "Critical hardware initialization failure. Entering safe deep sleep for 5 minutes.");
-        sleep_hw.enable_timer_wakeup(5ULL * 60ULL * 1000ULL * 1000ULL);
-        sleep_hw.deep_sleep_start();
-        return;
+    // Initialize NVS partition first so components using NVS (like WiFi / Storage) can operate
+    if (nvs.init_partition() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize NVS partition!");
     }
+
+    // Create ESP-NOW receive queue
+    QueueHandle_t app_rx_queue = hal_freertos.queue_create(30, sizeof(espnow::AppMessage));
 
     // Retrieve singleton references for DI
     auto& wifi = wifi_manager::WiFiManager::get_instance();
@@ -253,7 +183,10 @@ extern "C" void app_main()
     // Initialize application state (enable remote logging for field tests)
     constexpr bool IS_LOGGING = true;
     if (app.init(IS_LOGGING) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize WaterTankApp");
+        ESP_LOGE(TAG, "Critical hardware/application initialization failure. Entering safe deep sleep for 5 minutes.");
+        sleep_hw.enable_timer_wakeup(5ULL * 60ULL * 1000ULL * 1000ULL);
+        sleep_hw.deep_sleep_start();
+        return;
     }
 
     // Run the main application flow

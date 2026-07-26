@@ -20,6 +20,9 @@ public:
     {
     }
 
+    /** @copydoc ILevelSensor::init() */
+    esp_err_t init() override { return sensor_.init(); }
+
     /** @copydoc ILevelSensor::read_level() */
     ultrasonic::Reading read_level() override { return sensor_.read_distance(ping_count_); }
 

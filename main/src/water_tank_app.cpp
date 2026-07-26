@@ -54,16 +54,79 @@ void WaterTankApp::on_ota_triggered(OtaTriggerSource source)
 }
 
 #include "udp_logger.hpp"
+#include "secrets.hpp"
 
 esp_err_t WaterTankApp::init(bool is_logging)
 {
-    // 1. Load state and statistics from persistent storage
+    esp_err_t err;
+
+    // 1. WifiManager initialization
+    if ((err = wifi_.init()) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize WiFiManager: %s", esp_err_to_name(err));
+        return err;
+    }
+    if ((err = wifi_.add_credentials(WIFI_SSID, WIFI_PASS)) != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set WiFi credentials: %s", esp_err_to_name(err));
+    }
+    if ((err = wifi_.start()) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start WiFiManager: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    // 2. FloatSwitch initialization
+    if ((err = float_switch_.init()) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize FloatSwitch: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    // 3. Storage / NVS Data load
     if (storage_.load(stats_) != ESP_OK) {
         ESP_LOGW(TAG, "Failed to load storage, using defaults");
         storage_.reset_to_defaults(stats_);
     }
 
-    // 2. Check pending OTA verification if any
+    // 4. EspNowManager initialization
+    espnow::EspNowConfig config;
+    config.node_id = static_cast<espnow::NodeId>(farm::NodeId::WATER_TANK);
+    config.node_type = static_cast<espnow::NodeType>(farm::NodeType::SENSOR);
+    config.app_rx_queue = rx_queue_;
+    config.wifi_channel = 1;
+    config.heartbeat_interval_ms = 0;
+    if ((err = comm_.init(config)) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize EspNowManager: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    // 5. PowerControl initialization
+    if ((err = power_.init()) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize PowerControl: %s", esp_err_to_name(err));
+        return err;
+    }
+    power_.turn_on();
+
+    // 6. Sensor initialization
+    if ((err = sensor_.init()) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize Sensor: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    // 7. OTA Manager initialization
+    OtaConfig ota_config{
+        .device_type = "water_tank",
+        .manifest_url = SERVER_URL,
+        .task_stack_size = 8192,
+        .task_priority = 5,
+        .transport = {.manifest_timeout_ms = 30000, .firmware_timeout_ms = 30000},
+        .security = {.allow_http_during_development = true},
+        .allow_same_version = false,
+        .restart_on_success = false,
+    };
+    if (!ota_manager_.init(ota_config)) {
+        ESP_LOGE(TAG, "Failed to initialize OTA Manager");
+        return ESP_FAIL;
+    }
+
+    // 8. Check pending OTA verification if any
     if (ota_manager_.check_pending_verify()) {
         ESP_LOGI(TAG, "New firmware pending verification. Confirming as valid.");
         if (ota_manager_.confirm_app_valid()) {
@@ -75,11 +138,10 @@ esp_err_t WaterTankApp::init(bool is_logging)
         }
     }
 
-    // 3. Configure WiFi & Remote UDP Logging if requested
+    // 9. Configure WiFi & Remote UDP Logging if requested
     if (is_logging) {
         ESP_LOGI(TAG, "Connecting to WiFi synchronously for remote logging...");
-        esp_err_t err = wifi_.connect(15000);
-        if (err != ESP_OK) {
+        if ((err = wifi_.connect(15000)) != ESP_OK) {
             ESP_LOGE(TAG, "Failed to connect to WiFi for logging: %s", esp_err_to_name(err));
         }
         else {
