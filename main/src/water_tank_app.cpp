@@ -53,7 +53,9 @@ void WaterTankApp::on_ota_triggered(OtaTriggerSource source)
     ota_triggered_ = true;
 }
 
-esp_err_t WaterTankApp::init()
+#include "udp_logger.hpp"
+
+esp_err_t WaterTankApp::init(bool is_logging)
 {
     // 1. Load state and statistics from persistent storage
     if (storage_.load(stats_) != ESP_OK) {
@@ -70,6 +72,19 @@ esp_err_t WaterTankApp::init()
         else {
             ESP_LOGE(TAG, "Failed to confirm firmware. Triggering rollback.");
             ota_manager_.rollback_and_reboot();
+        }
+    }
+
+    // 3. Configure WiFi & Remote UDP Logging if requested
+    if (is_logging) {
+        ESP_LOGI(TAG, "Connecting to WiFi synchronously for remote logging...");
+        esp_err_t err = wifi_.connect(15000);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to connect to WiFi for logging: %s", esp_err_to_name(err));
+        }
+        else {
+            comm_.set_channel_policy(espnow::ChannelPolicy::FIXED);
+            udp_logger::init("192.168.1.23", 4444);
         }
     }
 

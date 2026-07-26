@@ -213,19 +213,6 @@ static esp_err_t setup_hardware()
         return ESP_FAIL;
     }
 
-    // connect wifi
-    ESP_LOGI(TAG, "Connecting to WiFi synchronously...");
-    if ((err = wifi.connect(15000)) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to connect to WiFi: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    // Now that WiFi is connected, set EspNow channel policy to FIXED so EspNowManager won't hop channels during scans
-    espnow.set_channel_policy(espnow::ChannelPolicy::FIXED);
-
-    // Initialize UDP Remote Logger after WiFi connection is active
-    udp_logger::init("192.168.1.23", 4444);
-
     return ESP_OK;
 }
 
@@ -263,8 +250,9 @@ extern "C" void app_main()
         espnow_ota_trigger,
         hal_system);
 
-    // Initialize application state
-    if (app.init() != ESP_OK) {
+    // Initialize application state (enable remote logging for field tests)
+    constexpr bool IS_LOGGING = true;
+    if (app.init(IS_LOGGING) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize WaterTankApp");
     }
 

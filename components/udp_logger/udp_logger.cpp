@@ -1,16 +1,17 @@
 #include "udp_logger.hpp"
 #include "esp_log.h"
+
+namespace udp_logger {
+
+static const char* TAG = "UdpLogger";
+
+#if !defined(__linux__) && !defined(PROJ_HOST_TEST)
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/ringbuf.h"
 #include "lwip/sockets.h"
 
-#include <cstdio>
-#include <cstring>
-
-namespace udp_logger {
-
-static const char* TAG = "UdpLogger";
 static RingbufHandle_t log_ringbuf = nullptr;
 static vprintf_like_t original_vprintf = nullptr;
 static int udp_sock = -1;
@@ -69,5 +70,16 @@ void init(const std::string& dest_ip, uint16_t port)
         ESP_LOGE(TAG, "Failed to create ring buffer for UDP Logger");
     }
 }
+
+#else
+
+void init(const std::string& dest_ip, uint16_t port)
+{
+    (void)dest_ip;
+    (void)port;
+    ESP_LOGI(TAG, "UDP Logger disabled on host test");
+}
+
+#endif
 
 } // namespace udp_logger

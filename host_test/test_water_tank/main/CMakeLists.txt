@@ -32,6 +32,7 @@ idf_component_register(
         idf_hals
         ota_manager
         time_manager
+        udp_logger
         WHOLE_ARCHIVE
 )
 

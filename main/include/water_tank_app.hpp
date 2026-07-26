@@ -45,9 +45,10 @@ public:
 
     /**
      * @brief Initialize application state, dependencies and check OTA status.
+     * @param is_logging If true, connects WiFi, sets ESP-NOW channel policy to FIXED, and initializes UDP logger.
      * @return ESP_OK if initialization succeeded.
      */
-    esp_err_t init();
+    esp_err_t init(bool is_logging = false);
 
     /**
      * @brief Execute the main application loop.
