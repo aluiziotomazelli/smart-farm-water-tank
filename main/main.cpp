@@ -9,7 +9,7 @@
 #include "us_types.hpp"
 #include "water_tank_app.hpp"
 #include "water_tank_nvs.hpp"
-#include "water_tank_storage_adapter.hpp"
+#include "persistence_backend.hpp"
 #include "secrets.hpp"
 #include "ota_manager.hpp"
 #include "button_ota_trigger.hpp"
@@ -43,6 +43,9 @@ static constexpr gpio_num_t BATTERY_LEVEL_GPIO = GPIO_NUM_3; // D1
 static constexpr gpio_num_t BOOT_BUTTON_GPIO = GPIO_NUM_9;   // Boot button has no external pad
 
 static constexpr uint8_t PING_COUNT = 11; // Initial ping count per distance measurment
+
+static constexpr const char* CORE_NVS_NAMESPACE = "core";
+static constexpr const char* STATS_NVS_NAMESPACE = "tank_stats";
 
 // HAL instances for sharing across components
 static idf_hals::GpioHAL hal_gpio;
@@ -100,10 +103,15 @@ static UltrasonicLevelSensorAdapter sensor_adapter{sensor_us, PING_COUNT};
 static idf_hals::SleepHAL sleep_hw;
 
 // Persistence and App instantiation
-static WaterTankNvs nvs{nvs_hal};
+static RTC_DATA_ATTR CoreStorage g_rtc_core;
+static RtcBackend rtc_core_backend(&g_rtc_core, sizeof(CoreStorage));
+static NvsBackend nvs_core_backend{nvs_hal, CORE_NVS_NAMESPACE};
+static NvsCore nvs_core{rtc_core_backend, nvs_core_backend};
 
-// StorageAdapter
-static WaterTankStorageAdapter storage_adapter{nvs};
+static RTC_DATA_ATTR WaterTankStats g_rtc_tank;
+static RtcBackend rtc_stats_backend(&g_rtc_tank, sizeof(WaterTankStats));
+static NvsBackend nvs_stats_backend{nvs_hal, STATS_NVS_NAMESPACE};
+static WaterTankNvs nvs_tank{rtc_stats_backend, nvs_stats_backend};
 
 // TankGeometry
 static TankGeometry geometry{SENSOR_OFFSET_CM};
@@ -150,9 +158,9 @@ extern "C" void app_main()
     ESP_LOGI(TAG, "Initializing Smart Farm Water Tank...");
 
     // Initialize NVS partition first so components using NVS (like WiFi / Storage) can operate
-    if (nvs.init_partition() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize NVS partition!");
-    }
+    // if (nvs.init_partition() != ESP_OK) {
+    //     ESP_LOGE(TAG, "Failed to initialize NVS partition!");
+    // }
 
     // Create ESP-NOW receive queue
     QueueHandle_t app_rx_queue = hal_freertos.queue_create(30, sizeof(espnow::AppMessage));
@@ -163,9 +171,10 @@ extern "C" void app_main()
 
     // Instantiate app with dependencies
     WaterTankApp app(
+        nvs_core,
+        nvs_tank,
         sensor_adapter,
         float_switch,
-        storage_adapter,
         espnow,
         app_rx_queue,
         power,

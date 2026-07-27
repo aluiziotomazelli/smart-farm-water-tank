@@ -12,9 +12,10 @@ static constexpr uint32_t SENSOR_WARMUP_MS = 600;
 static const char* TAG = "WaterTankApp";
 
 WaterTankApp::WaterTankApp(
+    INvsCore& core_storage,
+    IWaterTankNvs& tank_storage,
     ILevelSensor& sensor,
     floatswitch::IFloatSwitch& float_switch,
-    IWaterTankStorage& storage,
     espnow::IEspNowManager& comm,
     QueueHandle_t rx_queue,
     power_control::IPowerControl& power,
@@ -28,9 +29,10 @@ WaterTankApp::WaterTankApp(
     IOtaTrigger& btn_trigger,
     IOtaTrigger& espnow_trigger,
     idf_hals::ISystemHAL& system_hal)
-    : sensor_(sensor)
+    : core_storage_(core_storage)
+    , tank_storage_(tank_storage)
+    , sensor_(sensor)
     , float_switch_(float_switch)
-    , storage_(storage)
     , comm_(comm)
     , rx_queue_(rx_queue)
     , power_(power)
@@ -72,9 +74,8 @@ esp_err_t WaterTankApp::init(bool is_logging)
     }
 
     // 3. Storage / NVS Data load
-    if ((err = storage_.load(stats_)) != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to load storage: %s, using defaults", esp_err_to_name(err));
-        storage_.reset_to_defaults(stats_);
+    if ((err = init_storage()) != ESP_OK) {
+        return err;
     }
 
     // 4. EspNowManager initialization
@@ -167,8 +168,11 @@ void WaterTankApp::run()
     stats_.gpio_wakeup_enabled = float_switch_.should_enable_wakeup();
 
     // 8. Save updated state (Single NVS write)
-    if (storage_.save(stats_) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to save stats to storage");
+    if (core_storage_.save_core(core_) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to save stats to core storage");
+    }
+    if (tank_storage_.save_app_data(stats_) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to save stats to tank storage");
     }
 
     // 9. Enter deep sleep
@@ -492,4 +496,18 @@ void WaterTankApp::init_logger()
         comm_.set_channel_policy(espnow::ChannelPolicy::FIXED);
         udp_logger::init("192.168.1.23", 4444);
     }
+}
+
+esp_err_t WaterTankApp::init_storage()
+{
+    esp_err_t err;
+    if ((err = core_storage_.load_core(core_)) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize core storage: %s", esp_err_to_name(err));
+        return err;
+    }
+    if ((err = tank_storage_.load_app_data(stats_)) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize tank storage: %s", esp_err_to_name(err));
+        return err;
+    }
+    return ESP_OK;
 }

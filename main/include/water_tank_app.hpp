@@ -2,8 +2,9 @@
 
 #include "interfaces/i_hal_sleep.hpp"
 #include "interfaces/i_level_sensor.hpp"
-#include "interfaces/i_water_tank_storage.hpp"
 #include "i_espnow_manager.hpp"
+#include "interfaces/i_nvs_core.hpp"
+#include "interfaces/i_water_tank_nvs.hpp"
 #include "interfaces/i_power_control.hpp"
 #include "interfaces/i_wifi_manager.hpp"
 #include "water_tank_logic.hpp"
@@ -26,9 +27,10 @@ class WaterTankApp : public IOtaTriggerListener
 public:
     /** @brief Constructor for testing (dependency injection) */
     WaterTankApp(
+        INvsCore& core_storage,
+        IWaterTankNvs& tank_storage,
         ILevelSensor& sensor,
         floatswitch::IFloatSwitch& float_switch,
-        IWaterTankStorage& storage,
         espnow::IEspNowManager& comm,
         QueueHandle_t rx_queue,
         power_control::IPowerControl& power,
@@ -59,9 +61,10 @@ public:
     void on_ota_triggered(OtaTriggerSource source) override;
 
 private:
+    INvsCore& core_storage_;
+    IWaterTankNvs& tank_storage_;
     ILevelSensor& sensor_;
     floatswitch::IFloatSwitch& float_switch_;
-    IWaterTankStorage& storage_;
     espnow::IEspNowManager& comm_;
     QueueHandle_t rx_queue_;
     power_control::IPowerControl& power_;
@@ -79,6 +82,7 @@ private:
     std::atomic<bool> ota_triggered_{false};
 
     WaterTankStats stats_;
+    CoreStorage core_;
 
     esp_err_t send_report();
     farm::SensorStatus map_status(ultrasonic::UsResult result);
@@ -91,6 +95,7 @@ private:
     esp_err_t init_wifi();
     esp_err_t init_espnow();
     esp_err_t init_ota_manager();
+    esp_err_t init_storage();
     void check_firmware();
     void init_logger();
 };

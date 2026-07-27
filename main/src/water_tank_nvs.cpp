@@ -1,66 +1,119 @@
 #include "water_tank_nvs.hpp"
 #include "core_types.hpp"
 #include "esp_log.h"
+#include <cstdint>
 #include <cstring>
 
 #include "esp_attr.h"
+#include "water_tank_stats.hpp"
 
 static const char* TAG = "WaterTankNvs";
 
-RTC_DATA_ATTR static WaterTankStats rtc_tank_stats;
-RTC_DATA_ATTR static bool rtc_tank_stats_valid = false;
-
-WaterTankNvs::WaterTankNvs(idf_hals::INvsHAL& hal)
-    : NvsCore("water_tank", hal)
+WaterTankNvs::WaterTankNvs(IPersistenceBackend& rtc_stats, IPersistenceBackend& nvs_stats)
+    : rtc_stats_(rtc_stats)
+    , nvs_stats_(nvs_stats)
 {
 }
 
-esp_err_t WaterTankNvs::load_app_data()
+esp_err_t WaterTankNvs::load_app_data(WaterTankStats& stats)
 {
-    if (rtc_tank_stats_valid) {
-        ESP_LOGI(TAG, "Loaded tank stats from RTC memory");
-        stats = rtc_tank_stats;
+    WaterTankStats temp_stats = {};
+
+    esp_err_t ret = load_raw_app_data(temp_stats);
+    if (ret == ESP_OK) {
+        stats = temp_stats;
+    }
+
+    return ret;
+}
+
+esp_err_t WaterTankNvs::save_app_data(const WaterTankStats& stats, bool force_nvs_commit)
+{
+    WaterTankStats new_stats = stats;
+    new_stats.magic = WaterTankStats::MAGIC;
+
+    bool is_dirty = is_app_data_dirty(new_stats);
+
+    // Calculate CRC to save if data is dirty
+    new_stats.crc = calculate_crc(new_stats);
+
+    // If data is not dirty and force_nvs_commit is false, return
+    if (!is_dirty && !force_nvs_commit) {
         return ESP_OK;
     }
 
-    esp_err_t err = load_struct("tank_stats", stats);
-    if (err == ESP_OK) {
-        ESP_LOGI(TAG, "Loaded tank stats from NVS flash");
-        rtc_tank_stats = stats;
-        rtc_tank_stats_valid = true;
-    } else {
-        ESP_LOGW(TAG, "Failed to load tank stats from NVS, using defaults");
-        stats.reset();
-        rtc_tank_stats = stats;
-        rtc_tank_stats_valid = true;
+    // If is dirty, save to RTC
+    if (is_dirty) {
+        rtc_stats_.save(&new_stats, sizeof(new_stats));
+        ESP_LOGI(TAG, "Saved tank stats to RTC");
     }
-    return err;
-}
 
-esp_err_t WaterTankNvs::save_app_data(bool force_nvs)
-{
-    bool is_dirty = !rtc_tank_stats_valid || (stats != rtc_tank_stats);
-    bool need_nvs = force_nvs || is_dirty;
-
-    rtc_tank_stats = stats;
-    rtc_tank_stats_valid = true;
-
-    if (need_nvs) {
-        ESP_LOGI(TAG, "Saved tank stats to NVS flash (dirty: %d, force: %d)", is_dirty, force_nvs);
-        return save_struct("tank_stats", stats);
+    // If NVS commit is forced, save to nvs
+    if (force_nvs_commit) {
+        esp_err_t err = nvs_stats_.save(&new_stats, sizeof(new_stats));
+        if (err == ESP_OK) {
+            ESP_LOGI(TAG, "Saved tank stats to NVS");
+            return ESP_OK;
+        }
+        else {
+            ESP_LOGE(TAG, "Failed to save tank stats to NVS: %s", esp_err_to_name(err));
+            return err;
+        }
     }
     return ESP_OK;
 }
 
-void WaterTankNvs::set_app_defaults()
-{
-    ESP_LOGI(TAG, "Setting application default values");
-    stats.reset();
-    rtc_tank_stats = stats;
-    rtc_tank_stats_valid = true;
+// =================================================
+// Private methods
+// =================================================
 
-    // Core identity defaults
-    core_.node_id = farm::NodeId::WATER_TANK;
-    core_.node_type = farm::NodeType::SENSOR;
-    core_.power_profile = PowerProfile::DEEP_SLEEP;
+esp_err_t WaterTankNvs::load_raw_app_data(WaterTankStats& data_out)
+{
+    esp_err_t ret;
+
+    ret = rtc_stats_.load(&data_out, sizeof(data_out));
+    if (ret == ESP_OK) {
+        ret = validate_app_data(data_out);
+        if (ret == ESP_OK) {
+            ESP_LOGD(TAG, "Loaded tank stats from RTC memory");
+            return ESP_OK;
+        }
+    }
+
+    ret = nvs_stats_.load(&data_out, sizeof(data_out));
+    if (ret == ESP_OK) {
+        ret = validate_app_data(data_out);
+        if (ret == ESP_OK) {
+            // Sync valid NVS data back to RTC
+            rtc_stats_.save(&data_out, sizeof(data_out));
+            ESP_LOGD(TAG, "Loaded tank stats from NVS flash");
+            return ESP_OK;
+        }
+    }
+    return ret;
+}
+
+esp_err_t WaterTankNvs::validate_app_data(const WaterTankStats& data)
+{
+    if (data.magic != WaterTankStats::MAGIC) {
+        ESP_LOGW(TAG, "Invalid magic number in tank stats: 0x%04X", data.magic);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (data.crc != calculate_crc<WaterTankStats>(data)) {
+        ESP_LOGW(TAG, "CRC mismatch in tank stats: 0x%08X", data.crc);
+        return ESP_ERR_INVALID_CRC;
+    }
+    return ESP_OK;
+}
+
+bool WaterTankNvs::is_app_data_dirty(const WaterTankStats& new_data) const
+{
+    WaterTankStats current_data;
+
+    if (rtc_stats_.load(&current_data, sizeof(current_data)) != ESP_OK) {
+        return true; // Assume dirty if we can't load current data from RTC
+    }
+
+    return (current_data != new_data);
 }
