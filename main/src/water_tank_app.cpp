@@ -131,7 +131,7 @@ void WaterTankApp::run()
 
         // Power on sensor and wait for warmup
         power_.turn_on();
-        rtos_.task_delay(pdMS_TO_TICKS(SENSOR_WARMUP_MS));
+        // rtos_.task_delay(pdMS_TO_TICKS(SENSOR_WARMUP_MS));
 
         // 2. Perform sensor reading
         ultrasonic::Reading reading = sensor_.read_level();
@@ -186,7 +186,7 @@ void WaterTankApp::run()
 
         // 9. Enter deep sleep
         enter_deep_sleep(sleep_time_us);
-        rtos_.task_delay(pdMS_TO_TICKS(5000));
+        // rtos_.task_delay(pdMS_TO_TICKS(5000));
     }
 }
 
