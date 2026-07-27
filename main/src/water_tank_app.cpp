@@ -89,6 +89,7 @@ esp_err_t WaterTankApp::init(bool is_logging)
     if ((err = init_espnow()) != ESP_OK) {
         return err;
     }
+    comm_.set_channel_policy(espnow::ChannelPolicy::FIXED);
 
     // 5. PowerControl initialization
     if ((err = power_.init()) != ESP_OK) {
@@ -176,15 +177,15 @@ void WaterTankApp::run()
         stats_.gpio_wakeup_enabled = float_switch_.should_enable_wakeup();
 
         // 8. Save updated state (Single NVS write)
-        // if (core_storage_.save_core(core_) != ESP_OK) {
-        //     ESP_LOGE(TAG, "Failed to save stats to core storage");
-        // }
-        // if (tank_storage_.save_app_data(stats_) != ESP_OK) {
-        //     ESP_LOGE(TAG, "Failed to save stats to tank storage");
-        // }
+        if (core_storage_.save_core(core_) != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to save stats to core storage");
+        }
+        if (tank_storage_.save_app_data(stats_) != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to save stats to tank storage");
+        }
 
         // 9. Enter deep sleep
-        // enter_deep_sleep(sleep_time_us);
+        enter_deep_sleep(sleep_time_us);
         rtos_.task_delay(pdMS_TO_TICKS(5000));
     }
 }
@@ -503,7 +504,14 @@ void WaterTankApp::init_logger()
         ESP_LOGE(TAG, "Failed to connect to WiFi for logging: %s", esp_err_to_name(err));
     }
     else {
+        wifi_.disconnect(2000);
+        wifi_.connect(15000);
         comm_.set_channel_policy(espnow::ChannelPolicy::FIXED);
+        while (wifi_.get_state() != wifi_manager::State::CONNECTED_GOT_IP) {
+            ESP_LOGE(TAG, "Waiting for WiFi connection.");
+            rtos_.task_delay(pdMS_TO_TICKS(200));
+        }
+
         udp_logger::init("192.168.1.23", 4444);
     }
 }

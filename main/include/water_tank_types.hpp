@@ -11,7 +11,7 @@ static constexpr uint8_t TANK_HEIGHT_CM = 150; ///< Nominal total height of the 
 static constexpr float SENSOR_OFFSET_CM = 28.1; ///< Offset of the sensor from the top of water max level (cm)
 
 static constexpr float SENSOR_MIN_DISTANCE_CM = 25.0f;  ///< Minimum distance for sensor valid measure
-static constexpr float SENSOR_MAX_DISTANCE_CM = 150.0f; ///< Maximum distance for sensor valid measure
+static constexpr float SENSOR_MAX_DISTANCE_CM = 178.0f; ///< Maximum distance for sensor valid measure
 
 static constexpr uint16_t BATTERY_EMPTY_MV = 3000; ///< Voltage threshold representing 0% battery (millivolts)
 static constexpr uint16_t BATTERY_FULL_MV = 4200;  ///< Voltage threshold representing 100% battery (millivolts)
