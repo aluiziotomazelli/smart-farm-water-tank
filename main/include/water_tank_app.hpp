@@ -95,7 +95,8 @@ private:
     esp_err_t init_wifi();
     esp_err_t init_espnow();
     esp_err_t init_ota_manager();
-    esp_err_t init_storage();
+    esp_err_t init_core_storage();
+    esp_err_t init_tank_storage();
     void check_firmware();
     void init_logger();
 };

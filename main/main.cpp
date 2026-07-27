@@ -44,8 +44,8 @@ static constexpr gpio_num_t BOOT_BUTTON_GPIO = GPIO_NUM_9;   // Boot button has 
 
 static constexpr uint8_t PING_COUNT = 11; // Initial ping count per distance measurment
 
-static constexpr const char* CORE_NVS_NAMESPACE = "core";
-static constexpr const char* STATS_NVS_NAMESPACE = "tank_stats";
+static constexpr const char* CORE_NVS_KEY = "core";
+static constexpr const char* STATS_NVS_KEY = "tank_stats";
 
 // HAL instances for sharing across components
 static idf_hals::GpioHAL hal_gpio;
@@ -105,12 +105,12 @@ static idf_hals::SleepHAL sleep_hw;
 // Persistence and App instantiation
 static RTC_DATA_ATTR CoreStorage g_rtc_core;
 static RtcBackend rtc_core_backend(&g_rtc_core, sizeof(CoreStorage));
-static NvsBackend nvs_core_backend{nvs_hal, CORE_NVS_NAMESPACE};
+static NvsBackend nvs_core_backend{nvs_hal, CORE_NVS_KEY};
 static NvsCore nvs_core{rtc_core_backend, nvs_core_backend};
 
 static RTC_DATA_ATTR WaterTankStats g_rtc_tank;
 static RtcBackend rtc_stats_backend(&g_rtc_tank, sizeof(WaterTankStats));
-static NvsBackend nvs_stats_backend{nvs_hal, STATS_NVS_NAMESPACE};
+static NvsBackend nvs_stats_backend{nvs_hal, STATS_NVS_KEY};
 static WaterTankNvs nvs_tank{rtc_stats_backend, nvs_stats_backend};
 
 // TankGeometry
@@ -192,8 +192,8 @@ extern "C" void app_main()
     // Initialize application state (enable remote logging for field tests)
     constexpr bool IS_LOGGING = true;
     if (app.init(IS_LOGGING) != ESP_OK) {
-        ESP_LOGE(TAG, "Critical hardware/application initialization failure. Entering safe deep sleep for 5 minutes.");
-        sleep_hw.enable_timer_wakeup(5ULL * 60ULL * 1000ULL * 1000ULL);
+        ESP_LOGE(TAG, "Critical hardware/application initialization failure. Entering safe deep sleep for 1 minute.");
+        sleep_hw.enable_timer_wakeup(1ULL * 60ULL * 1000ULL * 1000ULL);
         sleep_hw.deep_sleep_start();
         return;
     }

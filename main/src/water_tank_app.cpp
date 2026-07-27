@@ -1,10 +1,14 @@
 #include "water_tank_app.hpp"
+#include "core_types.hpp"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
 #include "esp_system.h"
 #include "espnow_ota_trigger.hpp"
 #include "farm_protocol_types.hpp"
+#include "freertos/projdefs.h"
+
+#include "i_hal_nvs.hpp"
 
 static constexpr uint32_t RUN_LOOP_DELAY_MS = 10000;
 static constexpr uint32_t SENSOR_WARMUP_MS = 600;
@@ -74,7 +78,10 @@ esp_err_t WaterTankApp::init(bool is_logging)
     }
 
     // 3. Storage / NVS Data load
-    if ((err = init_storage()) != ESP_OK) {
+    if ((err = init_core_storage()) != ESP_OK) {
+        return err;
+    }
+    if ((err = init_tank_storage()) != ESP_OK) {
         return err;
     }
 
@@ -116,67 +123,70 @@ esp_err_t WaterTankApp::init(bool is_logging)
 
 void WaterTankApp::run()
 {
-    // Arm triggers for OTA
-    btn_trigger_.arm(*this);
-    espnow_trigger_.arm(*this);
+    while (true) {
+        // Arm triggers for OTA
+        btn_trigger_.arm(*this);
+        espnow_trigger_.arm(*this);
 
-    // Power on sensor and wait for warmup
-    power_.turn_on();
-    rtos_.task_delay(pdMS_TO_TICKS(SENSOR_WARMUP_MS));
+        // Power on sensor and wait for warmup
+        power_.turn_on();
+        rtos_.task_delay(pdMS_TO_TICKS(SENSOR_WARMUP_MS));
 
-    // 2. Perform sensor reading
-    ultrasonic::Reading reading = sensor_.read_level();
+        // 2. Perform sensor reading
+        ultrasonic::Reading reading = sensor_.read_level();
 
-    // Turn off sensor power as soon as we have the reading
-    power_.turn_off();
+        // Turn off sensor power as soon as we have the reading
+        power_.turn_off();
 
-    // 3. Process logic (Brain)
-    logic_.process_reading(reading, stats_);
-    logic_.update_operation_mode(stats_);
+        // 3. Process logic (Brain)
+        logic_.process_reading(reading, stats_);
+        logic_.update_operation_mode(stats_);
 
-    // 4. Read battery status
-    if (battery_monitor_.init() == ESP_OK) {
-        battery_monitor::BatteryReading bat_reading;
-        if (battery_monitor_.read(bat_reading) == ESP_OK) {
-            logic_.process_battery(bat_reading.voltage_mv, stats_);
-            battery_monitor_.deinit();
+        // 4. Read battery status
+        if (battery_monitor_.init() == ESP_OK) {
+            battery_monitor::BatteryReading bat_reading;
+            if (battery_monitor_.read(bat_reading) == ESP_OK) {
+                logic_.process_battery(bat_reading.voltage_mv, stats_);
+                battery_monitor_.deinit();
+            }
         }
+
+        ESP_LOGI(
+            TAG,
+            "Distance: %.1f - UsResult %d - Permile: %d | Battery: %d | FillState: %d",
+            reading.cm,
+            static_cast<int>(reading.result),
+            stats_.level_permille,
+            stats_.last_battery_mv,
+            static_cast<int>(stats_.fill_state));
+
+        // 5. Transmit data to Hub
+        send_report();
+
+        // 6. Listen for incoming messages (e.g. START_OTA, SLEEP_OVERRIDE) before sleeping
+        uint64_t override_sleep_us = listen_for_messages(LISTEN_WINDOW_MS);
+
+        if (ota_triggered_) {
+            process_pending_ota();
+        }
+
+        uint64_t sleep_time_us = (override_sleep_us > 0) ? override_sleep_us : logic_.calculate_sleep_time_us(stats_);
+
+        // 7. Determine GPIO wakeup status to save in NVS
+        stats_.gpio_wakeup_enabled = float_switch_.should_enable_wakeup();
+
+        // 8. Save updated state (Single NVS write)
+        // if (core_storage_.save_core(core_) != ESP_OK) {
+        //     ESP_LOGE(TAG, "Failed to save stats to core storage");
+        // }
+        // if (tank_storage_.save_app_data(stats_) != ESP_OK) {
+        //     ESP_LOGE(TAG, "Failed to save stats to tank storage");
+        // }
+
+        // 9. Enter deep sleep
+        // enter_deep_sleep(sleep_time_us);
+        rtos_.task_delay(pdMS_TO_TICKS(5000));
     }
-
-    ESP_LOGI(
-        TAG,
-        "Distance: %.1f - UsResult %d - Permile: %d | Battery: %d | FillState: %d",
-        reading.cm,
-        static_cast<int>(reading.result),
-        stats_.level_permille,
-        stats_.last_battery_mv,
-        static_cast<int>(stats_.fill_state));
-
-    // 5. Transmit data to Hub
-    send_report();
-
-    // 6. Listen for incoming messages (e.g. START_OTA, SLEEP_OVERRIDE) before sleeping
-    uint64_t override_sleep_us = listen_for_messages(LISTEN_WINDOW_MS);
-
-    if (ota_triggered_) {
-        process_pending_ota();
-    }
-
-    uint64_t sleep_time_us = (override_sleep_us > 0) ? override_sleep_us : logic_.calculate_sleep_time_us(stats_);
-
-    // 7. Determine GPIO wakeup status to save in NVS
-    stats_.gpio_wakeup_enabled = float_switch_.should_enable_wakeup();
-
-    // 8. Save updated state (Single NVS write)
-    if (core_storage_.save_core(core_) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to save stats to core storage");
-    }
-    if (tank_storage_.save_app_data(stats_) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to save stats to tank storage");
-    }
-
-    // 9. Enter deep sleep
-    enter_deep_sleep(sleep_time_us);
 }
 
 // =====================================================================
@@ -498,16 +508,62 @@ void WaterTankApp::init_logger()
     }
 }
 
-esp_err_t WaterTankApp::init_storage()
+esp_err_t WaterTankApp::init_core_storage()
 {
-    esp_err_t err;
-    if ((err = core_storage_.load_core(core_)) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize core storage: %s", esp_err_to_name(err));
-        return err;
+    esp_err_t ret;
+    ret = core_storage_.load_core(core_);
+
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "Loaded core storage from nvs");
+        return ESP_OK;
     }
-    if ((err = tank_storage_.load_app_data(stats_)) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize tank storage: %s", esp_err_to_name(err));
-        return err;
+
+    if (ret == ESP_ERR_NVS_NOT_FOUND) {
+        core_.reset();
+        core_.node_id = farm::NodeId::WATER_TANK;
+        core_.node_type = farm::NodeType::SENSOR;
+        core_.power_profile = PowerProfile::DEEP_SLEEP;
+
+        ret = core_storage_.save_core(core_, /*force_nvs_commit=*/true);
+
+        if (ret == ESP_OK) {
+            ESP_LOGI(TAG, "NVS Core not found. Created new default core storage");
+            return ESP_OK;
+        }
+        else {
+            ESP_LOGE(TAG, "Failed to create new core storage: %s", esp_err_to_name(ret));
+            return ret;
+        }
     }
-    return ESP_OK;
+
+    ESP_LOGE(TAG, "Failed to initialize core storage: %s", esp_err_to_name(ret));
+    return ret;
+}
+
+esp_err_t WaterTankApp::init_tank_storage()
+{
+    esp_err_t ret;
+    ret = tank_storage_.load_app_data(stats_);
+
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "Loaded tank stats from storage");
+        return ESP_OK;
+    }
+
+    if (ret == ESP_ERR_NVS_NOT_FOUND) {
+        stats_.reset();
+        ret = tank_storage_.save_app_data(stats_, /*force_nvs_commit=*/true);
+
+        if (ret == ESP_OK) {
+            ESP_LOGW(TAG, "NVS Tank not found. Created new default tank storage");
+            return ESP_OK;
+        }
+        else {
+            ESP_LOGE(TAG, "Failed to create new tank storage: %s", esp_err_to_name(ret));
+            return ret;
+        }
+    }
+
+    ESP_LOGE(TAG, "Failed to initialize tank storage: %s", esp_err_to_name(ret));
+    return ret;
 }
