@@ -103,10 +103,10 @@ esp_err_t WaterTankApp::init(bool is_logging)
     power_.turn_on();
 
     // 6. Sensor initialization
-    // if ((err = sensor_.init()) != ESP_OK) {
-    //     ESP_LOGE(TAG, "Failed to initialize Sensor: %s", esp_err_to_name(err));
-    //     return err;
-    // }
+    if ((err = sensor_.init()) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize Sensor: %s", esp_err_to_name(err));
+        return err;
+    }
 
     // 7. OTA Manager initialization
     if ((err = init_ota_manager()) != ESP_OK) {
@@ -131,21 +131,32 @@ void WaterTankApp::run()
     while (true) {
         process_node_state();
 
-        esp_err_t err;
-
         // Arm triggers for OTA
         btn_trigger_.arm(*this);
         espnow_trigger_.arm(*this);
 
-        // Power on sensor and wait for warmup
-        power_.turn_on();
+        esp_err_t err;
+        ultrasonic::Reading reading;
+
+        // Power on sensor and wait for warmup if needed
+        err = power_.turn_on();
         // rtos_.task_delay(pdMS_TO_TICKS(SENSOR_WARMUP_MS));
 
-        // 2. Perform sensor reading
-        ultrasonic::Reading reading = sensor_.read_level(DEFAULT_SAMPLE_COUNT);
+        // Perform sensor reading if power on was successful
+        if (err == ESP_OK) {
+            reading = sensor_.read_level(DEFAULT_SAMPLE_COUNT);
+            power_.turn_off();
+        }
+        // Log error if power on failed
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to power on sensor: %s", esp_err_to_name(err));
 
-        // Turn off sensor power as soon as we have the reading
-        power_.turn_off();
+            reading.result = ultrasonic::UsResult::HW_FAULT;
+            reading.cm = 0;
+
+            session_healthy_ = false;
+            continue;
+        }
 
         // 3. Process logic (Brain)
         logic_.process_reading(reading, stats_);
