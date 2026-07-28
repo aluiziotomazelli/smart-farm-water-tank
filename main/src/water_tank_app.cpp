@@ -15,6 +15,8 @@ static constexpr uint32_t SENSOR_WARMUP_MS = 600;
 static constexpr uint16_t DISCONNECT_WIFI_TIMEOUT_MS = 2000;
 static constexpr uint16_t CONNECT_WIFI_TIMEOUT_MS = 15000;
 
+static constexpr uint8_t DEFAULT_SAMPLE_COUNT = 11; // Initial ping count per distance measurment
+
 static const char* TAG = "WaterTankApp";
 
 WaterTankApp::WaterTankApp(
@@ -101,10 +103,10 @@ esp_err_t WaterTankApp::init(bool is_logging)
     power_.turn_on();
 
     // 6. Sensor initialization
-    if ((err = sensor_.init()) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize Sensor: %s", esp_err_to_name(err));
-        return err;
-    }
+    // if ((err = sensor_.init()) != ESP_OK) {
+    //     ESP_LOGE(TAG, "Failed to initialize Sensor: %s", esp_err_to_name(err));
+    //     return err;
+    // }
 
     // 7. OTA Manager initialization
     if ((err = init_ota_manager()) != ESP_OK) {
@@ -127,6 +129,8 @@ esp_err_t WaterTankApp::init(bool is_logging)
 void WaterTankApp::run()
 {
     while (true) {
+        process_node_state();
+
         esp_err_t err;
 
         // Arm triggers for OTA
@@ -138,7 +142,7 @@ void WaterTankApp::run()
         // rtos_.task_delay(pdMS_TO_TICKS(SENSOR_WARMUP_MS));
 
         // 2. Perform sensor reading
-        ultrasonic::Reading reading = sensor_.read_level();
+        ultrasonic::Reading reading = sensor_.read_level(DEFAULT_SAMPLE_COUNT);
 
         // Turn off sensor power as soon as we have the reading
         power_.turn_off();
@@ -431,7 +435,7 @@ void WaterTankApp::process_pending_ota()
 
         if (status == OtaStatus::READY_TO_RESTART) {
             ESP_LOGI(TAG, "OTA completed. Disconnecting WiFi if connected and restarting safely.");
-            if (connnected_by_us) {
+            if (connected_by_us) {
                 disconnect_stop_wifi();
                 system_hal_.restart();
             }

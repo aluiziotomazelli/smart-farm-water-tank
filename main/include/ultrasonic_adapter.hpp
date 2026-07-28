@@ -1,3 +1,5 @@
+// main/include/ultrasonic_adapter.hpp
+
 #pragma once
 #include "interfaces/i_level_sensor.hpp"
 #include "us_sensor.hpp"
@@ -12,21 +14,15 @@ public:
     /**
      * @brief Construct a new Ultrasonic Level Sensor Adapter object.
      * @param sensor Reference to the ultrasonic sensor interface.
-     * @param ping_count Number of pings to perform per measurement (default 5).
      */
-    UltrasonicLevelSensorAdapter(ultrasonic::IUsSensor& sensor, uint8_t ping_count = 5)
+    explicit UltrasonicLevelSensorAdapter(ultrasonic::IUsSensor& sensor)
         : sensor_(sensor)
-        , ping_count_(ping_count)
     {
     }
 
-    /** @copydoc ILevelSensor::init() */
-    esp_err_t init() override { return sensor_.init(); }
-
     /** @copydoc ILevelSensor::read_level() */
-    ultrasonic::Reading read_level() override { return sensor_.read_distance(ping_count_); }
+    ultrasonic::Reading read_level(uint8_t sample_count) override { return sensor_.read_distance(sample_count); }
 
 private:
     ultrasonic::IUsSensor& sensor_;
-    uint8_t ping_count_;
 };

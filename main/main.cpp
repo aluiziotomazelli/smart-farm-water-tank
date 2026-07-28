@@ -42,8 +42,6 @@ static constexpr gpio_num_t FLOAT_SWITCH_GPIO = GPIO_NUM_2;  // D0 need be D0-D3
 static constexpr gpio_num_t BATTERY_LEVEL_GPIO = GPIO_NUM_3; // D1
 static constexpr gpio_num_t BOOT_BUTTON_GPIO = GPIO_NUM_9;   // Boot button has no external pad
 
-static constexpr uint8_t PING_COUNT = 11; // Initial ping count per distance measurment
-
 static constexpr const char* CORE_NVS_KEY = "core";
 static constexpr const char* STATS_NVS_KEY = "tank_stats";
 
@@ -97,7 +95,7 @@ ultrasonic::UsConfig us_config{
 
 static ultrasonic::UsSensor
     sensor_us{hal_gpio, hal_timer, hal_sys_rom, hal_freertos, US_TRIG_GPIO, US_ECHO_GPIO, us_config};
-static UltrasonicLevelSensorAdapter sensor_adapter{sensor_us, PING_COUNT};
+static UltrasonicLevelSensorAdapter sensor_adapter{sensor_us};
 
 // SleepHAL
 static idf_hals::SleepHAL sleep_hw;

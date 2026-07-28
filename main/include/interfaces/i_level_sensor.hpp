@@ -1,3 +1,4 @@
+// main/include/interfaces/i_level_sensor.hpp
 #pragma once
 #include <cstdint>
 #include "us_types.hpp"
@@ -15,15 +16,12 @@ public:
     virtual ~ILevelSensor() = default;
 
     /**
-     * @brief Initializes the sensor hardware if required.
-     * @return ESP_OK on success.
-     */
-    virtual esp_err_t init() { return ESP_OK; }
-
-    /**
      * @brief Reads the distance or level from the sensor.
+     *
+     * @param sample_count Number of individual measurements (samples) to perform internally.
+     *        The sensor implementation uses this to control the accuracy vs. speed trade-off.
      *
      * @return ultrasonic::Reading containing the distance in cm and the result status.
      */
-    virtual ultrasonic::Reading read_level() = 0;
+    virtual ultrasonic::Reading read_level(uint8_t sample_count) = 0;
 };
