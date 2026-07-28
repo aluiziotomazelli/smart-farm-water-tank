@@ -1,7 +1,8 @@
 #pragma once
-#include "farm_protocol_types.hpp"
 #include <cstdint>
-// #include "common_types.hpp"
+
+#include "farm_protocol_types.hpp"
+#include "protocol_types.hpp" //< espnow:: constants
 
 // Constants for water tank logic
 // NOTE: TANK_HEIGHT_CM is no longer passed to TankGeometry. The usable tank
@@ -13,11 +14,10 @@ static constexpr float SENSOR_OFFSET_CM = 28.1; ///< Offset of the sensor from t
 static constexpr float SENSOR_MIN_DISTANCE_CM = 25.0f;  ///< Minimum distance for sensor valid measure
 static constexpr float SENSOR_MAX_DISTANCE_CM = 178.0f; ///< Maximum distance for sensor valid measure
 
-static constexpr uint16_t BATTERY_EMPTY_MV = 3000; ///< Voltage threshold representing 0% battery (millivolts)
-static constexpr uint16_t BATTERY_FULL_MV = 4200;  ///< Voltage threshold representing 100% battery (millivolts)
-static constexpr uint16_t BATTERY_LOW_MV = 3400;   ///< Voltage threshold representing low battery level (millivolts)
-static constexpr uint16_t BATTERY_CRITICAL_MV =
-    3200; ///< Voltage threshold representing critical battery level (millivolts)
+static constexpr uint16_t BATTERY_EMPTY_MV = 3000;    ///< Voltage threshold representing 0% battery (millivolts)
+static constexpr uint16_t BATTERY_FULL_MV = 4200;     ///< Voltage threshold representing 100% battery (millivolts)
+static constexpr uint16_t BATTERY_LOW_MV = 3400;      ///< Voltage threshold representing low battery level (millivolts)
+static constexpr uint16_t BATTERY_CRITICAL_MV = 3200; ///< Voltage representing critical battery level (millivolts)
 
 static constexpr uint16_t LEVEL_DELTA_MIN = 5; ///< Minimum level change to detect (5 ppm)
 
@@ -27,6 +27,9 @@ static constexpr uint64_t TIMER_DRAIN_US = 2ULL * 60ULL * 1000000ULL;  ///< Time
 static constexpr uint64_t TIMER_UNKNOWN_US = 60ULL * 1000000ULL; ///< Time to sleep when tank state is unknown (60 s)
 
 static constexpr uint32_t NVS_COMMIT_INTERVAL = 10; ///< Number of cycles before committing stats to NVS (10 cycles)
+
+// Time to wait if in RECOVERY_SCAN NodeState
+constexpr uint32_t RECOVERY_SCAN_WAIT_MS = espnow::SCAN_CHANNEL_TIMEOUT_MS * espnow::SCAN_CHANNEL_ATTEMPTS * 13 + 200;
 
 // 200ms covers hub processing (10-20ms) and ESP-NOW hardware retries safely
 static constexpr uint32_t LISTEN_WINDOW_MS = 200;

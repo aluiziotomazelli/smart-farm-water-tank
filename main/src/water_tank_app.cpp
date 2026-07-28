@@ -125,6 +125,8 @@ esp_err_t WaterTankApp::init(bool is_logging)
 void WaterTankApp::run()
 {
     while (true) {
+        esp_err_t err;
+
         // Arm triggers for OTA
         btn_trigger_.arm(*this);
         espnow_trigger_.arm(*this);
@@ -162,7 +164,13 @@ void WaterTankApp::run()
             static_cast<int>(stats_.fill_state));
 
         // 5. Transmit data to Hub
-        send_report();
+        err = send_report();
+        if (err != ESP_OK || comm_.get_node_state() == espnow::NodeState::RECOVERY_SCAN) {
+            if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
+                ESP_LOGI(TAG, "Retrying to send report after channel recovery...");
+                send_report();
+            }
+        }
 
         // 6. Listen for incoming messages (e.g. START_OTA, SLEEP_OVERRIDE) before sleeping
         uint64_t override_sleep_us = listen_for_messages(LISTEN_WINDOW_MS);
@@ -293,6 +301,33 @@ void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
     }
 
     sleep_.deep_sleep_start();
+}
+
+bool WaterTankApp::wait_for_comm_ready(uint32_t timeout_ms)
+{
+    espnow::NodeState state = comm_.get_node_state();
+
+    if (state == espnow::NodeState::RECOVERY_SCAN) {
+        constexpr uint32_t POLL_DELAY_MS = 100;
+        int64_t deadline_ms = (sys_timer_.get_time_us() / 1000) + timeout_ms;
+
+        while ((sys_timer_.get_time_us() / 1000) < deadline_ms) {
+            rtos_.task_delay(pdMS_TO_TICKS(POLL_DELAY_MS));
+            state = comm_.get_node_state();
+
+            if (state == espnow::NodeState::OPERATIONAL) {
+                ESP_LOGI(TAG, "ESP-NOW recovered channel during wait window");
+                return true;
+            }
+        }
+    }
+
+    if (state != espnow::NodeState::OPERATIONAL) {
+        ESP_LOGE(TAG, "ESP-NOW NodeState not ready after wait: %d", static_cast<int>(state));
+        return false;
+    }
+
+    return true;
 }
 
 uint64_t WaterTankApp::listen_for_messages(uint32_t timeout_ms)
