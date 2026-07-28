@@ -12,6 +12,8 @@
 
 static constexpr uint32_t RUN_LOOP_DELAY_MS = 10000;
 static constexpr uint32_t SENSOR_WARMUP_MS = 600;
+static constexpr uint16_t DISCONNECT_WIFI_TIMEOUT_MS = 2000;
+static constexpr uint16_t CONNECT_WIFI_TIMEOUT_MS = 15000;
 
 static const char* TAG = "WaterTankApp";
 
@@ -398,6 +400,12 @@ void WaterTankApp::process_pending_ota()
     bool wifi_ready = true;
     bool connected_by_us = false;
 
+    // Deinit triggers and other radio user (ESP-NOW) before OTA
+    comm_.deinit();
+    btn_trigger_.disarm();
+    espnow_trigger_.disarm();
+
+    // Connect wi-fi if needed
     if (wifi_.get_state() != wifi_manager::State::CONNECTED_GOT_IP) {
         ESP_LOGI(TAG, "WiFi not connected. Connecting for OTA...");
         if (wifi_.connect(OTA_WIFI_CONNECT_TIMEOUT_MS) == ESP_OK) {
@@ -423,15 +431,19 @@ void WaterTankApp::process_pending_ota()
 
         if (status == OtaStatus::READY_TO_RESTART) {
             ESP_LOGI(TAG, "OTA completed. Disconnecting WiFi if connected and restarting safely.");
-            disconnect_stop_wifi();
-            system_hal_.restart();
+            if (connnected_by_us) {
+                disconnect_stop_wifi();
+                system_hal_.restart();
+            }
         }
         else {
             ESP_LOGE(TAG, "OTA failed or timed out. Cancelling OTA.");
             ota_manager_.cancel_ota();
             if (connected_by_us) {
                 ESP_LOGI(TAG, "Disconnecting WiFi connected by OTA...");
-                wifi_.disconnect(2000);
+                if (connected_by_us) {
+                    wifi_.disconnect(2000);
+                }
             }
         }
     }
@@ -535,12 +547,12 @@ void WaterTankApp::init_logger()
     ESP_LOGI(TAG, "Connecting to WiFi synchronously for remote logging...");
 
     esp_err_t err;
-    if ((err = wifi_.connect(15000)) != ESP_OK) {
+    if ((err = wifi_.connect(CONNECT_WIFI_TIMEOUT_MS)) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to connect to WiFi for logging: %s", esp_err_to_name(err));
     }
     else {
-        wifi_.disconnect(2000);
-        wifi_.connect(15000);
+        wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
+        wifi_.connect(CONNECT_WIFI_TIMEOUT_MS);
         comm_.set_channel_policy(espnow::ChannelPolicy::FIXED);
         while (wifi_.get_state() != wifi_manager::State::CONNECTED_GOT_IP) {
             ESP_LOGE(TAG, "Waiting for WiFi connection.");
@@ -682,4 +694,19 @@ esp_err_t WaterTankApp::create_default_tank_storage()
     }
 
     return ret;
+}
+
+void WaterTankApp::process_node_state()
+{
+    espnow::NodeState state = comm_.get_node_state();
+    if (state == espnow::NodeState::OPERATIONAL) {
+        ESP_LOGI(TAG, "ESP-NOW NodeState OPERATIONAL");
+        return;
+    }
+
+    if (state == espnow::NodeState::PAIRING || state == espnow::NodeState::PAIRING_SCAN) {
+        ESP_LOGI(TAG, "ESP-NOW NodeState PAIRING");
+        // Placeholder to wait until pairing is complete
+        return;
+    }
 }

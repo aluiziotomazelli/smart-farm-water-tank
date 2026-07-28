@@ -89,12 +89,13 @@ private:
     bool pending_core_commit_ = false;
     bool pending_tank_commit_ = false;
 
+    void process_node_state();
     esp_err_t send_report();
     farm::SensorStatus map_status(ultrasonic::UsResult result);
-    void enter_deep_sleep(uint64_t sleep_time_us);
-    uint64_t listen_for_messages(uint32_t timeout_ms);
     bool wait_for_comm_ready(uint32_t timeout_ms = RECOVERY_SCAN_WAIT_MS);
+    uint64_t listen_for_messages(uint32_t timeout_ms);
     void process_pending_ota();
+    void enter_deep_sleep(uint64_t sleep_time_us);
     esp_err_t disconnect_stop_wifi();
     bool process_command(const espnow::AppMessage& msg, uint64_t& out_override_sleep_us);
 
