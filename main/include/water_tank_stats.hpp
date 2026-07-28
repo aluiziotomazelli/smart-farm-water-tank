@@ -56,8 +56,12 @@ struct WaterTankStats
     uint8_t last_battery_percent = 0;
     farm::BatteryState last_battery_state = farm::BatteryState::UNKNOWN;
 
-    // CRC MUST BE LAST (to CRC validation)
+    // CRC MUST BE LAST of the validated fields
     uint32_t crc = 0;
+
+    // Below: excluded from CRC calculation (after crc), but included in
+    // operator== so it persists in RTC across deep sleep cycles.
+    uint32_t cycles_since_nvs_commit = 0;
 
     void reset()
     {
@@ -77,7 +81,8 @@ struct WaterTankStats
                echo_stuck_count == other.echo_stuck_count && hw_fault_count == other.hw_fault_count &&
                gpio_wakeup_enabled == other.gpio_wakeup_enabled && backup_mode_active == other.backup_mode_active &&
                consecutive_failures == other.consecutive_failures && last_battery_mv == other.last_battery_mv &&
-               last_battery_percent == other.last_battery_percent && last_battery_state == other.last_battery_state;
+               last_battery_percent == other.last_battery_percent && last_battery_state == other.last_battery_state &&
+               cycles_since_nvs_commit == other.cycles_since_nvs_commit;
     }
 
     bool operator!=(const WaterTankStats& other) const { return !(*this == other); }

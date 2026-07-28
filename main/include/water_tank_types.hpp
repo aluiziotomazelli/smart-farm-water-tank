@@ -26,6 +26,8 @@ static constexpr uint64_t TIMER_STABLE_US = 5ULL * 60ULL * 1000000ULL; ///< Time
 static constexpr uint64_t TIMER_DRAIN_US = 2ULL * 60ULL * 1000000ULL;  ///< Time to sleep when tank is draining (2 min)
 static constexpr uint64_t TIMER_UNKNOWN_US = 60ULL * 1000000ULL; ///< Time to sleep when tank state is unknown (60 s)
 
+static constexpr uint32_t NVS_COMMIT_INTERVAL = 10; ///< Number of cycles before committing stats to NVS (10 cycles)
+
 // 200ms covers hub processing (10-20ms) and ESP-NOW hardware retries safely
 static constexpr uint32_t LISTEN_WINDOW_MS = 200;
 

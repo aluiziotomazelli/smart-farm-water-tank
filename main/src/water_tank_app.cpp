@@ -522,29 +522,94 @@ esp_err_t WaterTankApp::init_core_storage()
     ret = core_storage_.load_core(core_);
 
     if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "Loaded core storage from nvs");
+        ESP_LOGI(TAG, "Loaded core storage");
+        process_boot_reasons();
         return ESP_OK;
     }
 
     if (ret == ESP_ERR_NVS_NOT_FOUND) {
-        core_.reset();
-        core_.node_id = farm::NodeId::WATER_TANK;
-        core_.node_type = farm::NodeType::SENSOR;
-        core_.power_profile = PowerProfile::DEEP_SLEEP;
-
-        ret = core_storage_.save_core(core_, /*force_nvs_commit=*/true);
-
+        ret = create_default_core_storage();
         if (ret == ESP_OK) {
-            ESP_LOGI(TAG, "NVS Core not found. Created new default core storage");
+            process_boot_reasons();
             return ESP_OK;
-        }
-        else {
-            ESP_LOGE(TAG, "Failed to create new core storage: %s", esp_err_to_name(ret));
-            return ret;
         }
     }
 
-    ESP_LOGE(TAG, "Failed to initialize core storage: %s", esp_err_to_name(ret));
+    ESP_LOGE(TAG, "Failed to load core storage: %s", esp_err_to_name(ret));
+    return ret;
+}
+
+void WaterTankApp::process_boot_reasons()
+{
+    core_.boot_count++;
+
+    esp_reset_reason_t reason = system_hal_.reset_reason();
+    switch (reason) {
+    case ESP_RST_PANIC:
+    case ESP_RST_INT_WDT:
+    case ESP_RST_TASK_WDT:
+    case ESP_RST_WDT:
+    case ESP_RST_BROWNOUT:
+
+        core_.crash_count++;
+        pending_core_commit_ = true;
+        core_.last_wake = WakeSource::CRASH;
+        ESP_LOGW(TAG, "Reset from crash.");
+        break;
+
+    case ESP_RST_POWERON:
+        core_.last_wake = WakeSource::POWER_ON;
+        break;
+
+    case ESP_RST_SW:
+        core_.last_wake = WakeSource::RESTART;
+        break;
+
+    case ESP_RST_DEEPSLEEP:
+        process_wakeup_cause();
+        break;
+
+    default:
+        core_.last_wake = WakeSource::UNKNOWN;
+        break;
+    }
+}
+
+void WaterTankApp::process_wakeup_cause()
+{
+    esp_sleep_wakeup_cause_t cause = sleep_.get_wakeup_cause();
+    switch (cause) {
+    case ESP_SLEEP_WAKEUP_TIMER:
+        core_.last_wake = WakeSource::TIMER;
+        break;
+
+    case ESP_SLEEP_WAKEUP_EXT0:
+    case ESP_SLEEP_WAKEUP_EXT1:
+    case ESP_SLEEP_WAKEUP_GPIO:
+        core_.last_wake = WakeSource::GPIO;
+        break;
+
+    default:
+        core_.last_wake = WakeSource::UNKNOWN;
+    }
+}
+
+esp_err_t WaterTankApp::create_default_core_storage()
+{
+    core_.reset();
+    core_.node_id = farm::NodeId::WATER_TANK;
+    core_.node_type = farm::NodeType::SENSOR;
+    core_.power_profile = PowerProfile::DEEP_SLEEP;
+
+    esp_err_t ret = core_storage_.save_core(core_, /*force_nvs_commit=*/true);
+
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "NVS Core not found. Created new default core storage");
+    }
+    else {
+        ESP_LOGE(TAG, "Failed to create new core storage: %s", esp_err_to_name(ret));
+    }
+
     return ret;
 }
 
@@ -559,19 +624,27 @@ esp_err_t WaterTankApp::init_tank_storage()
     }
 
     if (ret == ESP_ERR_NVS_NOT_FOUND) {
-        stats_.reset();
-        ret = tank_storage_.save_app_data(stats_, /*force_nvs_commit=*/true);
-
+        ret = create_default_tank_storage();
         if (ret == ESP_OK) {
-            ESP_LOGW(TAG, "NVS Tank not found. Created new default tank storage");
             return ESP_OK;
-        }
-        else {
-            ESP_LOGE(TAG, "Failed to create new tank storage: %s", esp_err_to_name(ret));
-            return ret;
         }
     }
 
     ESP_LOGE(TAG, "Failed to initialize tank storage: %s", esp_err_to_name(ret));
+    return ret;
+}
+
+esp_err_t WaterTankApp::create_default_tank_storage()
+{
+    stats_.reset();
+    esp_err_t ret = tank_storage_.save_app_data(stats_, /*force_nvs_commit=*/true);
+
+    if (ret == ESP_OK) {
+        ESP_LOGW(TAG, "NVS Tank not found. Created new default tank storage");
+    }
+    else {
+        ESP_LOGE(TAG, "Failed to create new tank storage: %s", esp_err_to_name(ret));
+    }
+
     return ret;
 }

@@ -84,10 +84,16 @@ private:
     WaterTankStats stats_;
     CoreStorage core_;
 
+    bool session_healthy_ = true;
+    bool pending_firmware_verify_ = false;
+    bool pending_core_commit_ = false;
+    bool pending_tank_commit_ = false;
+
     esp_err_t send_report();
     farm::SensorStatus map_status(ultrasonic::UsResult result);
     void enter_deep_sleep(uint64_t sleep_time_us);
     uint64_t listen_for_messages(uint32_t timeout_ms);
+    void wait_for_comm_ready(uint32_t timeout_ms);
     void process_pending_ota();
     esp_err_t disconnect_stop_wifi();
     bool process_command(const espnow::AppMessage& msg, uint64_t& out_override_sleep_us);
@@ -96,7 +102,11 @@ private:
     esp_err_t init_espnow();
     esp_err_t init_ota_manager();
     esp_err_t init_core_storage();
+    esp_err_t create_default_core_storage();
+    void process_boot_reasons();
+    void process_wakeup_cause();
     esp_err_t init_tank_storage();
+    esp_err_t create_default_tank_storage();
     void check_firmware();
     void init_logger();
 };
