@@ -159,7 +159,10 @@ esp_err_t WaterTankApp::init(bool is_logging)
     }
 
     UBaseType_t hwm_bytes = rtos_.task_get_stack_high_water_mark();
-    ESP_LOGI(TAG, "App init completed. Main task stack high water mark: %u bytes remaining", static_cast<unsigned int>(hwm_bytes));
+    ESP_LOGI(
+        TAG,
+        "App init completed. Main task stack high water mark: %u bytes remaining",
+        static_cast<unsigned int>(hwm_bytes));
 
     return ESP_OK;
 }
@@ -253,7 +256,10 @@ void WaterTankApp::run(bool enter_sleep)
 
         // 11. Enter deep sleep (or delay if enter_sleep is false for testing)
         UBaseType_t hwm_bytes = rtos_.task_get_stack_high_water_mark();
-        ESP_LOGI(TAG, "Main task stack high water mark before sleep: %u bytes remaining", static_cast<unsigned int>(hwm_bytes));
+        ESP_LOGI(
+            TAG,
+            "Main task stack high water mark before sleep: %u bytes remaining",
+            static_cast<unsigned int>(hwm_bytes));
 
         if (enter_sleep) {
             enter_deep_sleep(sleep_time_us);
@@ -529,7 +535,7 @@ void WaterTankApp::process_pending_ota()
         if (status == OtaStatus::FAILED) {
             OtaFailReason reason = ota_manager_.get_last_error();
             err_code = map_ota_fail_reason(reason);
-            ESP_LOGE(TAG, "OTA failed (%d -> %d)", static_cast<int>(reason), static_cast<int>(err_code));
+            ESP_LOGE(TAG, "OTA failed (R:%d | C:%d)", static_cast<int>(reason), static_cast<int>(err_code));
         }
         else if (elapsed_ms >= OTA_WATCHDOG_TIMEOUT_MS) {
             err_code = farm::OtaErrorCode::WATCHDOG_TIMEOUT;
@@ -710,7 +716,6 @@ esp_err_t WaterTankApp::init_core_storage()
 void WaterTankApp::process_boot_reasons()
 {
     core_.boot_count++;
-    stats_.cycles_since_nvs_commit++;
 
     esp_reset_reason_t reason = system_hal_.reset_reason();
     switch (reason) {
@@ -788,12 +793,14 @@ esp_err_t WaterTankApp::init_tank_storage()
 
     if (ret == ESP_OK) {
         ESP_LOGI(TAG, "Loaded tank stats from storage");
+        stats_.cycles_since_nvs_commit++;
         return ESP_OK;
     }
 
     ESP_LOGW(TAG, "Tank storage load failed (%s), recreating default storage", esp_err_to_name(ret));
     ret = create_default_tank_storage();
     if (ret == ESP_OK) {
+        stats_.cycles_since_nvs_commit++;
         return ESP_OK;
     }
 
