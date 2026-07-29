@@ -41,3 +41,14 @@ idf.py --preview set-target linux
 idf.py build
 ./build/test_water_tank.elf
 ```
+
+## System & Configuration Notes
+
+### Main Task Stack Size
+Due to concurrent initialization of `WiFiManager`, `EspNowManager`, UDP Logger, NVS storage backends, and sensors, the peak stack consumption during startup reaches ~3.8 KB.
+The main task stack size must be set to at least **8 KB (8192 bytes)**:
+```ini
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+```
+Stack high water mark is monitored at startup and before entering deep sleep via `IHalFreertos::task_get_stack_high_water_mark()` (returns remaining space in bytes).
+

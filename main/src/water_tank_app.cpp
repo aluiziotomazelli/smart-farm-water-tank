@@ -99,7 +99,13 @@ esp_err_t WaterTankApp::init(bool is_logging)
         comm_.set_channel_policy(espnow::ChannelPolicy::FIXED);
         if (connect_wifi_with_retry() == ESP_OK) {
             udp_logger::init("192.168.1.23", 4444);
+            rtos_.task_delay(pdMS_TO_TICKS(5000));
         }
+    }
+
+    auto version = get_ota_version();
+    if (version.has_value()) {
+        ESP_LOGI(TAG, "Firmware version: %d.%d.%d", version->major, version->minor, version->patch);
     }
 
     // 3. FloatSwitch is safest than sensor
@@ -120,7 +126,9 @@ esp_err_t WaterTankApp::init(bool is_logging)
 
     // 5. EspNowManager initialization
     if ((err = init_espnow()) == ESP_OK) {
-        comm_.set_channel_policy(espnow::ChannelPolicy::FIXED);
+        if (is_logging) {
+            comm_.set_channel_policy(espnow::ChannelPolicy::FIXED);
+        }
     }
     else {
         session_healthy_ = false;
@@ -147,9 +155,11 @@ esp_err_t WaterTankApp::init(bool is_logging)
             ESP_LOGE(TAG, "Session is not healthy during OTA verification.");
             check_firmware();
         }
-        ESP_LOGE(TAG, "Session is not healthy, rolling back");
         return ESP_FAIL;
     }
+
+    UBaseType_t hwm_bytes = rtos_.task_get_stack_high_water_mark();
+    ESP_LOGI(TAG, "App init completed. Main task stack high water mark: %u bytes remaining", static_cast<unsigned int>(hwm_bytes));
 
     return ESP_OK;
 }
@@ -242,6 +252,9 @@ void WaterTankApp::run(bool enter_sleep)
         save_persistent_state();
 
         // 11. Enter deep sleep (or delay if enter_sleep is false for testing)
+        UBaseType_t hwm_bytes = rtos_.task_get_stack_high_water_mark();
+        ESP_LOGI(TAG, "Main task stack high water mark before sleep: %u bytes remaining", static_cast<unsigned int>(hwm_bytes));
+
         if (enter_sleep) {
             enter_deep_sleep(sleep_time_us);
         }
@@ -675,8 +688,7 @@ esp_err_t WaterTankApp::connect_wifi_with_retry(uint8_t max_attempts)
 
 esp_err_t WaterTankApp::init_core_storage()
 {
-    esp_err_t ret;
-    ret = core_storage_.load_core(core_);
+    esp_err_t ret = core_storage_.load_core(core_);
 
     if (ret == ESP_OK) {
         ESP_LOGI(TAG, "Loaded core storage");
@@ -684,15 +696,14 @@ esp_err_t WaterTankApp::init_core_storage()
         return ESP_OK;
     }
 
-    if (ret == ESP_ERR_NVS_NOT_FOUND) {
-        ret = create_default_core_storage();
-        if (ret == ESP_OK) {
-            process_boot_reasons();
-            return ESP_OK;
-        }
+    ESP_LOGW(TAG, "Core storage load failed (%s), recreating default storage", esp_err_to_name(ret));
+    ret = create_default_core_storage();
+    if (ret == ESP_OK) {
+        process_boot_reasons();
+        return ESP_OK;
     }
 
-    ESP_LOGE(TAG, "Failed to load core storage: %s", esp_err_to_name(ret));
+    ESP_LOGE(TAG, "Failed to initialize core storage: %s", esp_err_to_name(ret));
     return ret;
 }
 
@@ -773,19 +784,17 @@ esp_err_t WaterTankApp::create_default_core_storage()
 
 esp_err_t WaterTankApp::init_tank_storage()
 {
-    esp_err_t ret;
-    ret = tank_storage_.load_app_data(stats_);
+    esp_err_t ret = tank_storage_.load_app_data(stats_);
 
     if (ret == ESP_OK) {
         ESP_LOGI(TAG, "Loaded tank stats from storage");
         return ESP_OK;
     }
 
-    if (ret == ESP_ERR_NVS_NOT_FOUND) {
-        ret = create_default_tank_storage();
-        if (ret == ESP_OK) {
-            return ESP_OK;
-        }
+    ESP_LOGW(TAG, "Tank storage load failed (%s), recreating default storage", esp_err_to_name(ret));
+    ret = create_default_tank_storage();
+    if (ret == ESP_OK) {
+        return ESP_OK;
     }
 
     ESP_LOGE(TAG, "Failed to initialize tank storage: %s", esp_err_to_name(ret));
