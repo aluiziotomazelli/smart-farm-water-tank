@@ -698,6 +698,7 @@ esp_err_t WaterTankApp::init_core_storage()
 
     if (ret == ESP_OK) {
         ESP_LOGI(TAG, "Loaded core storage");
+        core_.boot_count++;
         process_boot_reasons();
         return ESP_OK;
     }
@@ -705,6 +706,7 @@ esp_err_t WaterTankApp::init_core_storage()
     ESP_LOGW(TAG, "Core storage load failed (%s), recreating default storage", esp_err_to_name(ret));
     ret = create_default_core_storage();
     if (ret == ESP_OK) {
+        core_.boot_count++;
         process_boot_reasons();
         return ESP_OK;
     }
@@ -715,8 +717,6 @@ esp_err_t WaterTankApp::init_core_storage()
 
 void WaterTankApp::process_boot_reasons()
 {
-    core_.boot_count++;
-
     esp_reset_reason_t reason = system_hal_.reset_reason();
     switch (reason) {
     case ESP_RST_PANIC:
