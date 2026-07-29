@@ -16,6 +16,13 @@ public:
     virtual ~ILevelSensor() = default;
 
     /**
+     * @brief Initializes the sensor.
+     *
+     * @return True if initialization succeeded, false otherwise.
+     */
+    virtual esp_err_t init() = 0;
+
+    /**
      * @brief Reads the distance or level from the sensor.
      *
      * @param sample_count Number of individual measurements (samples) to perform internally.

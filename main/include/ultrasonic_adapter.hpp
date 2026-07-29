@@ -20,6 +20,8 @@ public:
     {
     }
 
+    esp_err_t init() override { return sensor_.init(); }
+
     /** @copydoc ILevelSensor::read_level() */
     ultrasonic::Reading read_level(uint8_t sample_count) override { return sensor_.read_distance(sample_count); }
 
