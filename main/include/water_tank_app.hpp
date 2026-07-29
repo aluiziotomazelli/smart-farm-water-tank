@@ -104,6 +104,7 @@ private:
     esp_err_t send_ota_report(
         farm::OtaExecResult result,
         farm::OtaErrorCode error_code = farm::OtaErrorCode::NONE);
+    farm::OtaErrorCode map_ota_fail_reason(OtaFailReason reason) const;
 
     esp_err_t init_wifi();
     esp_err_t init_espnow();

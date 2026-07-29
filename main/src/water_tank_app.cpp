@@ -509,7 +509,17 @@ void WaterTankApp::process_pending_ota()
             }
         }
         else {
-            ESP_LOGE(TAG, "OTA failed or timed out. Cancelling OTA.");
+            farm::OtaErrorCode err_code = farm::OtaErrorCode::UNKNOWN_ERROR;
+            if (status == OtaStatus::FAILED) {
+                OtaFailReason reason = ota_manager_.get_last_error();
+                err_code = map_ota_fail_reason(reason);
+                ESP_LOGE(TAG, "OTA failed with reason: %d -> mapped error: %d", static_cast<int>(reason), static_cast<int>(err_code));
+            }
+            else if (elapsed_ms >= OTA_WATCHDOG_TIMEOUT_MS) {
+                err_code = farm::OtaErrorCode::WATCHDOG_TIMEOUT;
+                ESP_LOGE(TAG, "OTA timed out after %u ms", static_cast<unsigned int>(elapsed_ms));
+            }
+
             ota_manager_.cancel_ota();
             if (connected_by_us) {
                 ESP_LOGI(TAG, "Disconnecting WiFi connected by OTA...");
@@ -517,11 +527,19 @@ void WaterTankApp::process_pending_ota()
                 if (init_espnow() == ESP_OK) {
                     comm_.set_channel_policy(espnow::ChannelPolicy::SCAN);
                     if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
-                        send_ota_report(
-                            farm::OtaExecResult::DOWNLOAD_FAILED,
-                            farm::OtaErrorCode::HTTP_DOWNLOAD_FAILED);
+                        send_ota_report(farm::OtaExecResult::DOWNLOAD_FAILED, err_code);
                     }
                 }
+            }
+        }
+    }
+    else {
+        if (init_espnow() == ESP_OK) {
+            comm_.set_channel_policy(espnow::ChannelPolicy::SCAN);
+            if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
+                send_ota_report(
+                    farm::OtaExecResult::DOWNLOAD_FAILED,
+                    farm::OtaErrorCode::WIFI_CONNECT_FAILED);
             }
         }
     }
@@ -831,7 +849,6 @@ esp_err_t WaterTankApp::send_ota_report(
         report.fw_minor = version->minor;
         report.fw_patch = version->patch;
     }
-    report.error_code = error_code;
 
     return comm_.send_data(
         espnow::ReservedIds::HUB,
@@ -849,4 +866,41 @@ std::optional<OtaVersion> WaterTankApp::get_ota_version() const
         return VersionHelper::parse(app_info->version);
     }
     return std::nullopt;
+}
+
+farm::OtaErrorCode WaterTankApp::map_ota_fail_reason(OtaFailReason reason) const
+{
+    switch (reason) {
+    case OtaFailReason::MANIFEST_URL_INVALID:
+    case OtaFailReason::MANIFEST_INVALID:
+        return farm::OtaErrorCode::MANIFEST_PARSE_ERROR;
+
+    case OtaFailReason::MANIFEST_HTTP_FAIL:
+    case OtaFailReason::FIRMWARE_URL_INVALID:
+    case OtaFailReason::DOWNLOAD_HTTP_FAIL:
+        return farm::OtaErrorCode::HTTP_DOWNLOAD_FAILED;
+
+    case OtaFailReason::DEVICE_TYPE_MISMATCH:
+        return farm::OtaErrorCode::DEVICE_TYPE_MISMATCH;
+
+    case OtaFailReason::CURRENT_VERSION_PARSE_FAIL:
+    case OtaFailReason::VERSION_NOT_NEWER:
+    case OtaFailReason::DOWNLOAD_IMAGE_VERSION_FAIL:
+        return farm::OtaErrorCode::VERSION_NOT_NEWER;
+
+    case OtaFailReason::DOWNLOAD_SESSION_FAIL:
+    case OtaFailReason::DOWNLOAD_IMAGE_DESC_FAIL:
+        return farm::OtaErrorCode::DOWNLOAD_SESSION_FAIL;
+
+    case OtaFailReason::DOWNLOAD_FINISH_FAIL:
+    case OtaFailReason::HASH_PARTITION_FAIL:
+        return farm::OtaErrorCode::FLASH_WRITE_ERROR;
+
+    case OtaFailReason::HASH_MISMATCH:
+        return farm::OtaErrorCode::IMAGE_HASH_MISMATCH;
+
+    case OtaFailReason::NONE:
+    default:
+        return farm::OtaErrorCode::UNKNOWN_ERROR;
+    }
 }
