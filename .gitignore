@@ -25,5 +25,6 @@ host_test/**/coverage/
 .env
 
 # Local logs
+logger/unfilter-logs
 todo/
 

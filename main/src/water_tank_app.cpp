@@ -505,9 +505,7 @@ void WaterTankApp::process_pending_ota()
     // 4. Handle Outcome
     if (status == OtaStatus::READY_TO_RESTART) {
         ESP_LOGI(TAG, "OTA completed successfully. Restarting...");
-        if (connected_by_us) {
-            disconnect_stop_wifi();
-        }
+        disconnect_stop_wifi();
         system_hal_.restart();
     }
     else {
@@ -515,11 +513,7 @@ void WaterTankApp::process_pending_ota()
         if (status == OtaStatus::FAILED) {
             OtaFailReason reason = ota_manager_.get_last_error();
             err_code = map_ota_fail_reason(reason);
-            ESP_LOGE(
-                TAG,
-                "OTA failed (%d -> %d)",
-                static_cast<int>(reason),
-                static_cast<int>(err_code));
+            ESP_LOGE(TAG, "OTA failed (%d -> %d)", static_cast<int>(reason), static_cast<int>(err_code));
         }
         else if (elapsed_ms >= OTA_WATCHDOG_TIMEOUT_MS) {
             err_code = farm::OtaErrorCode::WATCHDOG_TIMEOUT;
