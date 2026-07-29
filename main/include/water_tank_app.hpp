@@ -105,6 +105,7 @@ private:
         farm::OtaExecResult result,
         farm::OtaErrorCode error_code = farm::OtaErrorCode::NONE);
     farm::OtaErrorCode map_ota_fail_reason(OtaFailReason reason) const;
+    void report_ota_failure_and_restore_comm(farm::OtaErrorCode err_code, bool connected_by_us);
 
     esp_err_t init_wifi();
     esp_err_t init_espnow();

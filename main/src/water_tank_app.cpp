@@ -469,15 +469,14 @@ bool WaterTankApp::process_command(const espnow::AppMessage& msg, uint64_t& out_
 void WaterTankApp::process_pending_ota()
 {
     ESP_LOGI(TAG, "Processing pending OTA...");
-    bool wifi_ready = true;
     bool connected_by_us = false;
 
-    // Deinit triggers and other radio user (ESP-NOW) before OTA
+    // 1. Deinit radio users before OTA
     comm_.deinit();
     btn_trigger_.disarm();
     espnow_trigger_.disarm();
 
-    // Connect wi-fi if needed
+    // 2. Connect WiFi if not already connected
     if (wifi_.get_state() != wifi_manager::State::CONNECTED_GOT_IP) {
         ESP_LOGI(TAG, "WiFi not connected. Connecting for OTA...");
         if (wifi_.connect(CONNECT_WIFI_TIMEOUT_MS) == ESP_OK) {
@@ -485,72 +484,52 @@ void WaterTankApp::process_pending_ota()
         }
         else {
             ESP_LOGE(TAG, "Failed to connect to WiFi for OTA");
-            wifi_ready = false;
+            report_ota_failure_and_restore_comm(farm::OtaErrorCode::WIFI_CONNECT_FAILED, false);
+            ota_triggered_ = false;
+            return;
         }
     }
 
-    if (wifi_ready) {
-        ota_manager_.start_ota();
-        uint32_t elapsed_ms = 0;
-        OtaStatus status = ota_manager_.get_status();
+    // 3. Run OTA worker task
+    ota_manager_.start_ota();
+    uint32_t elapsed_ms = 0;
+    OtaStatus status = ota_manager_.get_status();
 
-        while (status != OtaStatus::READY_TO_RESTART && status != OtaStatus::FAILED &&
-               elapsed_ms < OTA_WATCHDOG_TIMEOUT_MS) {
-            rtos_.task_delay(pdMS_TO_TICKS(500));
-            elapsed_ms += 500;
-            status = ota_manager_.get_status();
+    while (status != OtaStatus::READY_TO_RESTART && status != OtaStatus::FAILED &&
+           elapsed_ms < OTA_WATCHDOG_TIMEOUT_MS) {
+        rtos_.task_delay(pdMS_TO_TICKS(500));
+        elapsed_ms += 500;
+        status = ota_manager_.get_status();
+    }
+
+    // 4. Handle Outcome
+    if (status == OtaStatus::READY_TO_RESTART) {
+        ESP_LOGI(TAG, "OTA completed successfully. Restarting...");
+        if (connected_by_us) {
+            disconnect_stop_wifi();
         }
-
-        if (status == OtaStatus::READY_TO_RESTART) {
-            ESP_LOGI(TAG, "OTA completed. Disconnecting WiFi if connected and restarting safely.");
-            if (connected_by_us) {
-                disconnect_stop_wifi();
-                system_hal_.restart();
-            }
-        }
-        else {
-            farm::OtaErrorCode err_code = farm::OtaErrorCode::UNKNOWN_ERROR;
-            if (status == OtaStatus::FAILED) {
-                OtaFailReason reason = ota_manager_.get_last_error();
-                err_code = map_ota_fail_reason(reason);
-                ESP_LOGE(
-                    TAG,
-                    "OTA failed with reason: %d -> mapped error: %d",
-                    static_cast<int>(reason),
-                    static_cast<int>(err_code));
-            }
-            else if (elapsed_ms >= OTA_WATCHDOG_TIMEOUT_MS) {
-                err_code = farm::OtaErrorCode::WATCHDOG_TIMEOUT;
-                ESP_LOGE(TAG, "OTA timed out after %u ms", static_cast<unsigned int>(elapsed_ms));
-            }
-
-            ota_manager_.cancel_ota();
-
-            if (connected_by_us) {
-                ESP_LOGI(TAG, "Disconnecting WiFi connected by OTA...");
-                wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
-            }
-            if (init_espnow() == ESP_OK) {
-                if (connected_by_us) {
-                    comm_.set_channel_policy(espnow::ChannelPolicy::SCAN);
-                }
-                else {
-                    comm_.set_channel_policy(espnow::ChannelPolicy::FIXED);
-                }
-                if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
-                    send_ota_report(farm::OtaExecResult::DOWNLOAD_FAILED, err_code);
-                }
-            }
-        }
+        system_hal_.restart();
     }
     else {
-        if (init_espnow() == ESP_OK) {
-            comm_.set_channel_policy(espnow::ChannelPolicy::SCAN);
-            if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
-                send_ota_report(farm::OtaExecResult::DOWNLOAD_FAILED, farm::OtaErrorCode::WIFI_CONNECT_FAILED);
-            }
+        farm::OtaErrorCode err_code = farm::OtaErrorCode::UNKNOWN_ERROR;
+        if (status == OtaStatus::FAILED) {
+            OtaFailReason reason = ota_manager_.get_last_error();
+            err_code = map_ota_fail_reason(reason);
+            ESP_LOGE(
+                TAG,
+                "OTA failed (%d -> %d)",
+                static_cast<int>(reason),
+                static_cast<int>(err_code));
         }
+        else if (elapsed_ms >= OTA_WATCHDOG_TIMEOUT_MS) {
+            err_code = farm::OtaErrorCode::WATCHDOG_TIMEOUT;
+            ESP_LOGE(TAG, "OTA watchdog timeout (%u ms)", static_cast<unsigned int>(elapsed_ms));
+        }
+
+        ota_manager_.cancel_ota();
+        report_ota_failure_and_restore_comm(err_code, connected_by_us);
     }
+
     ota_triggered_ = false;
 }
 
@@ -907,5 +886,20 @@ farm::OtaErrorCode WaterTankApp::map_ota_fail_reason(OtaFailReason reason) const
     case OtaFailReason::NONE:
     default:
         return farm::OtaErrorCode::UNKNOWN_ERROR;
+    }
+}
+
+void WaterTankApp::report_ota_failure_and_restore_comm(farm::OtaErrorCode err_code, bool connected_by_us)
+{
+    if (connected_by_us) {
+        ESP_LOGI(TAG, "Disconnecting WiFi connected by OTA...");
+        wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
+    }
+
+    if (init_espnow() == ESP_OK) {
+        comm_.set_channel_policy(connected_by_us ? espnow::ChannelPolicy::SCAN : espnow::ChannelPolicy::FIXED);
+        if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
+            send_ota_report(farm::OtaExecResult::DOWNLOAD_FAILED, err_code);
+        }
     }
 }
