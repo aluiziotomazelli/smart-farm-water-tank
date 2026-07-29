@@ -513,7 +513,11 @@ void WaterTankApp::process_pending_ota()
             if (status == OtaStatus::FAILED) {
                 OtaFailReason reason = ota_manager_.get_last_error();
                 err_code = map_ota_fail_reason(reason);
-                ESP_LOGE(TAG, "OTA failed with reason: %d -> mapped error: %d", static_cast<int>(reason), static_cast<int>(err_code));
+                ESP_LOGE(
+                    TAG,
+                    "OTA failed with reason: %d -> mapped error: %d",
+                    static_cast<int>(reason),
+                    static_cast<int>(err_code));
             }
             else if (elapsed_ms >= OTA_WATCHDOG_TIMEOUT_MS) {
                 err_code = farm::OtaErrorCode::WATCHDOG_TIMEOUT;
@@ -521,14 +525,20 @@ void WaterTankApp::process_pending_ota()
             }
 
             ota_manager_.cancel_ota();
+
             if (connected_by_us) {
                 ESP_LOGI(TAG, "Disconnecting WiFi connected by OTA...");
                 wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
-                if (init_espnow() == ESP_OK) {
+            }
+            if (init_espnow() == ESP_OK) {
+                if (connected_by_us) {
                     comm_.set_channel_policy(espnow::ChannelPolicy::SCAN);
-                    if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
-                        send_ota_report(farm::OtaExecResult::DOWNLOAD_FAILED, err_code);
-                    }
+                }
+                else {
+                    comm_.set_channel_policy(espnow::ChannelPolicy::FIXED);
+                }
+                if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
+                    send_ota_report(farm::OtaExecResult::DOWNLOAD_FAILED, err_code);
                 }
             }
         }
@@ -537,9 +547,7 @@ void WaterTankApp::process_pending_ota()
         if (init_espnow() == ESP_OK) {
             comm_.set_channel_policy(espnow::ChannelPolicy::SCAN);
             if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
-                send_ota_report(
-                    farm::OtaExecResult::DOWNLOAD_FAILED,
-                    farm::OtaErrorCode::WIFI_CONNECT_FAILED);
+                send_ota_report(farm::OtaExecResult::DOWNLOAD_FAILED, farm::OtaErrorCode::WIFI_CONNECT_FAILED);
             }
         }
     }
@@ -632,9 +640,8 @@ void WaterTankApp::check_firmware()
     }
 
     if (!session_healthy_ || !ota_manager_.confirm_app_valid()) {
-        farm::OtaErrorCode err = !session_healthy_
-            ? farm::OtaErrorCode::HEALTH_CHECK_FAILED
-            : farm::OtaErrorCode::PARTITION_CONFIRM_FAILED;
+        farm::OtaErrorCode err =
+            !session_healthy_ ? farm::OtaErrorCode::HEALTH_CHECK_FAILED : farm::OtaErrorCode::PARTITION_CONFIRM_FAILED;
 
         ESP_LOGE(TAG, "Failed to confirm firmware. Triggering rollback (reason: %d).", static_cast<int>(err));
 
@@ -835,9 +842,7 @@ void WaterTankApp::process_node_state()
     }
 }
 
-esp_err_t WaterTankApp::send_ota_report(
-    farm::OtaExecResult result,
-    farm::OtaErrorCode error_code)
+esp_err_t WaterTankApp::send_ota_report(farm::OtaExecResult result, farm::OtaErrorCode error_code)
 {
     farm::OtaStatusReport report = {};
     report.result = result;
