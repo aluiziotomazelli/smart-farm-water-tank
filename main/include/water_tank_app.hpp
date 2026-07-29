@@ -55,7 +55,7 @@ public:
     /**
      * @brief Execute the main application loop.
      */
-    void run();
+    void run(bool enter_sleep = true);
 
     /** @copydoc IOtaTriggerListener::on_ota_triggered */
     void on_ota_triggered(OtaTriggerSource source) override;
@@ -89,15 +89,21 @@ private:
     bool pending_core_commit_ = false;
     bool pending_tank_commit_ = false;
 
+    bool floatswitch_tank_full_ = false;
+
     void process_node_state();
     esp_err_t send_report();
     farm::SensorStatus map_status(ultrasonic::UsResult result);
-    bool wait_for_comm_ready(uint32_t timeout_ms = RECOVERY_SCAN_WAIT_MS);
+    bool wait_for_comm_ready(uint32_t timeout_ms);
     uint64_t listen_for_messages(uint32_t timeout_ms);
     void process_pending_ota();
     void enter_deep_sleep(uint64_t sleep_time_us);
+    void save_persistent_state();
     esp_err_t disconnect_stop_wifi();
     bool process_command(const espnow::AppMessage& msg, uint64_t& out_override_sleep_us);
+    esp_err_t send_ota_report(
+        farm::OtaExecResult result,
+        farm::OtaErrorCode error_code = farm::OtaErrorCode::NONE);
 
     esp_err_t init_wifi();
     esp_err_t init_espnow();
@@ -106,8 +112,11 @@ private:
     esp_err_t create_default_core_storage();
     void process_boot_reasons();
     void process_wakeup_cause();
+
     esp_err_t init_tank_storage();
     esp_err_t create_default_tank_storage();
     void check_firmware();
     void init_logger();
+
+    std::optional<OtaVersion> get_ota_version() const;
 };

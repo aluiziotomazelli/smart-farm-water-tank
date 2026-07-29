@@ -34,6 +34,9 @@
 
 static const char* TAG = "main";
 
+static constexpr bool IS_LOGGING = true;
+static constexpr bool ENTER_SLEEP = true;
+
 // Production Configuration for XIAO-ESP32-C3 Mini Board
 static constexpr gpio_num_t POWER_GPIO = GPIO_NUM_10;        // D10
 static constexpr gpio_num_t US_TRIG_GPIO = GPIO_NUM_4;       // D2
@@ -91,7 +94,7 @@ ultrasonic::UsConfig us_config{
     .filter = ultrasonic::Filter::DOMINANT_CLUSTER,
     .min_distance_cm = SENSOR_MIN_DISTANCE_CM,
     .max_distance_cm = SENSOR_MAX_DISTANCE_CM,
-    .warmup_time_ms = 600};
+    .warmup_time_ms = 0};
 
 static ultrasonic::UsSensor
     sensor_us{hal_gpio, hal_timer, hal_sys_rom, hal_freertos, US_TRIG_GPIO, US_ECHO_GPIO, us_config};
@@ -188,7 +191,7 @@ extern "C" void app_main()
         hal_system);
 
     // Initialize application state (enable remote logging for field tests)
-    constexpr bool IS_LOGGING = true;
+
     if (app.init(IS_LOGGING) != ESP_OK) {
         ESP_LOGE(TAG, "Critical hardware/application initialization failure. Entering safe deep sleep for 1 minute.");
         sleep_hw.enable_timer_wakeup(1ULL * 60ULL * 1000ULL * 1000ULL);
@@ -197,5 +200,5 @@ extern "C" void app_main()
     }
 
     // Run the main application flow
-    app.run();
+    app.run(ENTER_SLEEP);
 }
