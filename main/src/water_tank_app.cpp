@@ -12,6 +12,9 @@
 #include "protocol_types.hpp"
 #include "version_helper.hpp"
 
+#include "udp_logger.hpp"
+#include "secrets.hpp"
+
 // App Orchestrator Constants
 static constexpr uint32_t SENSOR_WARMUP_MS = 600;
 static constexpr uint8_t DEFAULT_SAMPLE_COUNT = 11;
@@ -72,9 +75,6 @@ void WaterTankApp::on_ota_triggered(OtaTriggerSource source)
     ota_triggered_ = true;
 }
 
-#include "udp_logger.hpp"
-#include "secrets.hpp"
-
 esp_err_t WaterTankApp::init(bool is_logging)
 {
     esp_err_t err;
@@ -92,6 +92,14 @@ esp_err_t WaterTankApp::init(bool is_logging)
     if ((err = init_wifi()) != ESP_OK) {
         session_healthy_ = false;
         ESP_LOGE(TAG, "Failed to initialize WiFiManager: %s", esp_err_to_name(err));
+    }
+
+    // 8. Connect WiFi & Remote UDP Logging if requested
+    if (is_logging) {
+        comm_.set_channel_policy(espnow::ChannelPolicy::FIXED);
+        if (connect_wifi_with_retry() == ESP_OK) {
+            udp_logger::init("192.168.1.23", 4444);
+        }
     }
 
     // 3. FloatSwitch is safest than sensor
@@ -133,15 +141,10 @@ esp_err_t WaterTankApp::init(bool is_logging)
         }
     }
 
-    // 8. Configure WiFi & Remote UDP Logging if requested
-    if (is_logging) {
-        init_logger();
-    }
-
     // 9. Roolback if session is not healthy
     if (!session_healthy_) {
         if (pending_firmware_verify_) {
-            ESP_LOGE(TAG, "Session is not healthy during OTA verification, rolling back");
+            ESP_LOGE(TAG, "Session is not healthy during OTA verification.");
             check_firmware();
         }
         ESP_LOGE(TAG, "Session is not healthy, rolling back");
@@ -479,7 +482,7 @@ void WaterTankApp::process_pending_ota()
     // 2. Connect WiFi if not already connected
     if (wifi_.get_state() != wifi_manager::State::CONNECTED_GOT_IP) {
         ESP_LOGI(TAG, "WiFi not connected. Connecting for OTA...");
-        if (wifi_.connect(CONNECT_WIFI_TIMEOUT_MS) == ESP_OK) {
+        if (connect_wifi_with_retry() == ESP_OK) {
             connected_by_us = true;
         }
         else {
@@ -644,26 +647,30 @@ void WaterTankApp::check_firmware()
     }
 }
 
-void WaterTankApp::init_logger()
+esp_err_t WaterTankApp::connect_wifi_with_retry(uint8_t max_attempts)
 {
-    ESP_LOGI(TAG, "Connecting to WiFi synchronously for remote logging...");
-
-    comm_.set_channel_policy(espnow::ChannelPolicy::FIXED);
-
-    esp_err_t err;
-    if ((err = wifi_.connect(CONNECT_WIFI_TIMEOUT_MS)) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to connect to WiFi for logging: %s", esp_err_to_name(err));
+    if (wifi_.get_state() == wifi_manager::State::CONNECTED_GOT_IP) {
+        return ESP_OK;
     }
-    else {
-        wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
-        wifi_.connect(CONNECT_WIFI_TIMEOUT_MS);
-        while (wifi_.get_state() != wifi_manager::State::CONNECTED_GOT_IP) {
-            ESP_LOGE(TAG, "Waiting for WiFi connection.");
-            rtos_.task_delay(pdMS_TO_TICKS(200));
+
+    esp_err_t err = ESP_FAIL;
+    for (uint8_t attempt = 1; attempt <= max_attempts; ++attempt) {
+        ESP_LOGI(TAG, "WiFi connection attempt %u/%u...", attempt, max_attempts);
+        err = wifi_.connect(CONNECT_WIFI_TIMEOUT_MS);
+        if (err == ESP_OK) {
+            ESP_LOGI(TAG, "WiFi connected successfully.");
+            return ESP_OK;
         }
 
-        udp_logger::init("192.168.1.23", 4444);
+        ESP_LOGW(TAG, "WiFi connection attempt %u failed: %s", attempt, esp_err_to_name(err));
+        if (attempt < max_attempts) {
+            wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
+            rtos_.task_delay(pdMS_TO_TICKS(500));
+        }
     }
+
+    ESP_LOGE(TAG, "Failed to connect to WiFi after %u attempts: %s", max_attempts, esp_err_to_name(err));
+    return err;
 }
 
 esp_err_t WaterTankApp::init_core_storage()
@@ -828,6 +835,7 @@ esp_err_t WaterTankApp::send_ota_report(farm::OtaExecResult result, farm::OtaErr
         report.fw_patch = version->patch;
     }
 
+    ESP_LOGI(TAG, "Sending OTA status report: result=%u, error_code=%u", result, error_code);
     return comm_.send_data(
         espnow::ReservedIds::HUB,
         static_cast<uint8_t>(farm::PayloadType::OTA_STATUS_REPORT),

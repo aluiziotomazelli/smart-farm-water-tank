@@ -118,7 +118,7 @@ private:
     esp_err_t init_tank_storage();
     esp_err_t create_default_tank_storage();
     void check_firmware();
-    void init_logger();
+    esp_err_t connect_wifi_with_retry(uint8_t max_attempts = 2);
 
     std::optional<OtaVersion> get_ota_version() const;
 };
