@@ -3,11 +3,11 @@ idf_component_register(
         "main.cpp"
         "test_water_tank_geometry.cpp"
         "test_water_tank_logic.cpp"
-        # "test_water_tank_app.cpp"
+        "test_water_tank_app.cpp"
         "test_water_tank_nvs.cpp"
         "../../../main/src/tank_geometry.cpp"
         "../../../main/src/water_tank_logic.cpp"
-        # "../../../main/src/water_tank_app.cpp"
+        "../../../main/src/water_tank_app.cpp"
         "../../../main/src/water_tank_nvs.cpp"
     INCLUDE_DIRS 
         "."
@@ -24,6 +24,7 @@ idf_component_register(
         espnow_manager
         power_control
         battery_monitor
+        wifi_manager
         idf_hals
         ota_manager
         time_manager

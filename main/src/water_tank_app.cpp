@@ -96,8 +96,8 @@ esp_err_t WaterTankApp::init(bool is_logging)
 
     // 8. Connect WiFi & Remote UDP Logging if requested
     if (is_logging) {
-        comm_.set_channel_policy(espnow::ChannelPolicy::FIXED);
         if (connect_wifi_with_retry() == ESP_OK) {
+            comm_.set_channel_policy(espnow::ChannelPolicy::FIXED); // Can be used even before comm init()
             udp_logger::init("192.168.1.23", 4444);
             rtos_.task_delay(pdMS_TO_TICKS(5000));
         }
@@ -125,12 +125,7 @@ esp_err_t WaterTankApp::init(bool is_logging)
     }
 
     // 5. EspNowManager initialization
-    if ((err = init_espnow()) == ESP_OK) {
-        if (is_logging) {
-            comm_.set_channel_policy(espnow::ChannelPolicy::FIXED);
-        }
-    }
-    else {
+    if ((err = init_espnow()) != ESP_OK) {
         session_healthy_ = false;
         ESP_LOGE(TAG, "Failed to initialize EspNowManager: %s", esp_err_to_name(err));
     }

@@ -5,5 +5,6 @@
 
 class MockLevelSensor : public ILevelSensor {
 public:
-    MOCK_METHOD(ultrasonic::Reading, read_level, (), (override));
+    MOCK_METHOD(esp_err_t, init, (), (override));
+    MOCK_METHOD(ultrasonic::Reading, read_level, (uint8_t sample_count), (override));
 };

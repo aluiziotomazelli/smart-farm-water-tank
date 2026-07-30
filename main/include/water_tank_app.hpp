@@ -14,6 +14,7 @@
 #include "interfaces/i_hal_timer.hpp"
 #include "interfaces/i_hal_freertos.hpp"
 #include <atomic>
+#include <optional>
 #include "interfaces/i_ota_trigger.hpp"
 #include "interfaces/i_ota_manager.hpp"
 #include "interfaces/i_hal_system.hpp"
@@ -81,6 +82,7 @@ private:
 
     std::atomic<bool> ota_triggered_{false};
 
+protected:
     WaterTankStats stats_;
     CoreStorage core_;
 
@@ -91,6 +93,7 @@ private:
 
     bool floatswitch_tank_full_ = false;
 
+private:
     void process_node_state();
     esp_err_t send_report();
     void retry_reading_if_needed(ultrasonic::Reading& reading);
@@ -102,9 +105,7 @@ private:
     void save_persistent_state();
     esp_err_t disconnect_stop_wifi();
     bool process_command(const espnow::AppMessage& msg, uint64_t& out_override_sleep_us);
-    esp_err_t send_ota_report(
-        farm::OtaExecResult result,
-        farm::OtaErrorCode error_code = farm::OtaErrorCode::NONE);
+    esp_err_t send_ota_report(farm::OtaExecResult result, farm::OtaErrorCode error_code = farm::OtaErrorCode::NONE);
     farm::OtaErrorCode map_ota_fail_reason(OtaFailReason reason) const;
     void report_ota_failure_and_restore_comm(farm::OtaErrorCode err_code, bool connected_by_us);
 
