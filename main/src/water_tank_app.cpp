@@ -199,9 +199,10 @@ void WaterTankApp::run(bool enter_sleep)
                 rtos_.task_delay(pdMS_TO_TICKS(remaining_warmup));
             }
             reading = sensor_.read_level(DEFAULT_SAMPLE_COUNT);
+            retry_reading_if_needed(reading);
             power_.turn_off();
         }
-        else {
+        else { // if sensor was not powered on
             ESP_LOGE(TAG, "Failed to power on sensor: %s", esp_err_to_name(pwr_err));
 
             reading.result = ultrasonic::UsResult::HW_FAULT;
@@ -300,6 +301,26 @@ esp_err_t WaterTankApp::send_report()
         ESP_LOGE(TAG, "Failed to send report: %s", esp_err_to_name(err));
     }
     return err;
+}
+
+void WaterTankApp::retry_reading_if_needed(ultrasonic::Reading& reading)
+{
+    if (reading.result == ultrasonic::UsResult::WEAK_SIGNAL) {
+        uint8_t retry_count = static_cast<uint8_t>(DEFAULT_SAMPLE_COUNT * 1.4f);
+        ESP_LOGW(TAG, "WEAK_SIGNAL detected. Retrying reading with %u samples", retry_count);
+        reading = sensor_.read_level(retry_count);
+    }
+    else if (
+        reading.result == ultrasonic::UsResult::HIGH_VARIANCE ||
+        reading.result == ultrasonic::UsResult::INSUFFICIENT_SAMPLES) {
+        uint8_t retry_count = static_cast<uint8_t>(DEFAULT_SAMPLE_COUNT * 1.8f);
+        ESP_LOGW(
+            TAG,
+            "Unstable result (%d). Retrying reading with %u samples",
+            static_cast<int>(reading.result),
+            retry_count);
+        reading = sensor_.read_level(retry_count);
+    }
 }
 
 farm::SensorStatus WaterTankApp::map_status(ultrasonic::UsResult result)

@@ -93,6 +93,7 @@ private:
 
     void process_node_state();
     esp_err_t send_report();
+    void retry_reading_if_needed(ultrasonic::Reading& reading);
     farm::SensorStatus map_status(ultrasonic::UsResult result);
     bool wait_for_comm_ready(uint32_t timeout_ms);
     uint64_t listen_for_messages(uint32_t timeout_ms);

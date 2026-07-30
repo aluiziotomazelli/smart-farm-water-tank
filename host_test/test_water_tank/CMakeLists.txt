@@ -2,9 +2,8 @@ cmake_minimum_required(VERSION 3.16)
 
 # List extra component directories so IDF can find our components.
 list(APPEND EXTRA_COMPONENT_DIRS
-    "../../components/smart-farm-common/common"
+    "../../components/smart-farm-common"
     "../../components/smart-farm-common/host_test/common"
-    "../../components/smart-farm-common/nvs_core"
     "../../components/ultrasonic_sensor"
     "../../components/floatswitch"
     "../../components/power_control"
@@ -27,8 +26,7 @@ list(APPEND EXTRA_COMPONENT_DIRS
 
 set(COMPONENTS 
     "main"
-    "common"
-    "nvs_core"
+    "smart-farm-common"
     "ultrasonic_sensor"
     "floatswitch"
     "espnow_manager"

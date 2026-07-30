@@ -5,8 +5,7 @@ set(PROJECT_NAME "water_tank")
 
 # Add paths for components (submodules and shared components)
 list(APPEND EXTRA_COMPONENT_DIRS
-    "${CMAKE_CURRENT_LIST_DIR}/components/smart-farm-common/common"
-    "${CMAKE_CURRENT_LIST_DIR}/components/smart-farm-common/nvs_core"
+    "${CMAKE_CURRENT_LIST_DIR}/components/smart-farm-common"
     "${CMAKE_CURRENT_LIST_DIR}/components/ultrasonic_sensor"
     "${CMAKE_CURRENT_LIST_DIR}/components/floatswitch"
     "${CMAKE_CURRENT_LIST_DIR}/components/power_control"

@@ -10,26 +10,19 @@ idf_component_register(
         # "../../../main/src/water_tank_app.cpp"
         "../../../main/src/water_tank_nvs.cpp"
     INCLUDE_DIRS 
-        "../../../components/smart-farm-common/nvs_core/include"
         "."
         "../../common"
         "../../../main/include"
         "../../../main"
-        "../../../components/wifi_manager/include"
-        "../../../components/espnow_manager/include"
-        "../../../components/power_control/include"
-        "../../../components/battery_monitor/include"
-        "../../../components/battery_monitor/include/interfaces"
         "../../../components/smart-farm-common/host_test/common"
         "../../../components/idf_hals/mocks"
     REQUIRES 
         gtest
-        common
+        smart-farm-common
         ultrasonic_sensor
         floatswitch
         espnow_manager
         power_control
-        nvs_core
         battery_monitor
         idf_hals
         ota_manager

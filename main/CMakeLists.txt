@@ -9,8 +9,7 @@ idf_component_register(
         "include"
         "."
     REQUIRES
-        nvs_core
-        common
+        smart-farm-common
         ultrasonic_sensor
         floatswitch
         espnow_manager

@@ -34,7 +34,7 @@
 
 static const char* TAG = "main";
 
-static constexpr bool IS_LOGGING = true;
+static constexpr bool IS_LOGGING = false;
 static constexpr bool ENTER_SLEEP = true;
 
 // Production Configuration for XIAO-ESP32-C3 Mini Board
