@@ -36,6 +36,7 @@ static const char* TAG = "main";
 
 static constexpr bool IS_LOGGING = false;
 static constexpr bool ENTER_SLEEP = true;
+static constexpr uint16_t LOOP_DELAY_IF_NOT_SLEEPING = 5000;
 
 // Production Configuration for XIAO-ESP32-C3 Mini Board
 static constexpr gpio_num_t POWER_GPIO = GPIO_NUM_10;        // D10
@@ -199,6 +200,8 @@ extern "C" void app_main()
         return;
     }
 
-    // Run the main application flow
-    app.run(ENTER_SLEEP);
+    // Run the main application flow in a loop if not sleeping
+    while (app.run(ENTER_SLEEP)) {
+        hal_freertos.task_delay(pdMS_TO_TICKS(LOOP_DELAY_IF_NOT_SLEEPING));
+    }
 }

@@ -162,106 +162,103 @@ esp_err_t WaterTankApp::init(bool is_logging)
     return ESP_OK;
 }
 
-void WaterTankApp::run(bool enter_sleep)
+bool WaterTankApp::run(bool enter_sleep)
 {
-    while (true) {
-        // 1. Power on sensor rail & check node state / arm triggers
-        esp_err_t pwr_err = power_.turn_on();
-        int64_t power_on_time_ms = sys_timer_.get_time_us() / 1000;
+    // 1. Power on sensor rail & check node state / arm triggers
+    esp_err_t pwr_err = power_.turn_on();
+    int64_t power_on_time_ms = sys_timer_.get_time_us() / 1000;
 
-        process_node_state();
+    process_node_state();
 
-        btn_trigger_.arm(*this);
-        espnow_trigger_.arm(*this);
+    btn_trigger_.arm(*this);
+    espnow_trigger_.arm(*this);
 
-        // 2. Read auxiliary sensors (FloatSwitch & Battery) while sensor warms up
-        floatswitch_tank_full_ = float_switch_.is_tank_full();
+    // 2. Read auxiliary sensors (FloatSwitch & Battery) while sensor warms up
+    floatswitch_tank_full_ = float_switch_.is_tank_full();
 
-        if (battery_monitor_.init() == ESP_OK) {
-            battery_monitor::BatteryReading bat_reading;
-            if (battery_monitor_.read(bat_reading) == ESP_OK) {
-                logic_.process_battery(bat_reading.voltage_mv, stats_);
-                battery_monitor_.deinit();
-            }
+    if (battery_monitor_.init() == ESP_OK) {
+        battery_monitor::BatteryReading bat_reading;
+        if (battery_monitor_.read(bat_reading) == ESP_OK) {
+            logic_.process_battery(bat_reading.voltage_mv, stats_);
+            battery_monitor_.deinit();
         }
-
-        // 3. Perform ultrasonic reading (wait remaining warmup if needed)
-        ultrasonic::Reading reading;
-        if (pwr_err == ESP_OK) {
-            int64_t elapsed_ms = (sys_timer_.get_time_us() / 1000) - power_on_time_ms;
-            if (elapsed_ms < SENSOR_WARMUP_MS) {
-                uint32_t remaining_warmup = SENSOR_WARMUP_MS - static_cast<uint32_t>(elapsed_ms);
-                rtos_.task_delay(pdMS_TO_TICKS(remaining_warmup));
-            }
-            reading = sensor_.read_level(DEFAULT_SAMPLE_COUNT);
-            retry_reading_if_needed(reading);
-            power_.turn_off();
-        }
-        else { // if sensor was not powered on
-            ESP_LOGE(TAG, "Failed to power on sensor: %s", esp_err_to_name(pwr_err));
-
-            reading.result = ultrasonic::UsResult::HW_FAULT;
-            reading.cm = 0;
-
-            session_healthy_ = false;
-        }
-
-        // 4. Process application logic & update stats
-        logic_.process_reading(reading, stats_);
-        logic_.update_operation_mode(stats_);
-
-        ESP_LOGI(
-            TAG,
-            "Distance: %.1f - UsResult %d - Permile: %d | Battery: %d | FillState: %d",
-            reading.cm,
-            static_cast<int>(reading.result),
-            stats_.level_permille,
-            stats_.last_battery_mv,
-            static_cast<int>(stats_.fill_state));
-
-        // 5. Transmit report to Hub (enqueues packet to TX task)
-        esp_err_t send_err = send_report();
-
-        // 6. Listen for incoming messages (gives time for background TX & ACK processing)
-        uint64_t override_sleep_us = listen_for_messages(LISTEN_WINDOW_MS);
-
-        // 7. Check comm status (if TX failed or node entered RECOVERY_SCAN, wait for channel recovery & retry)
-        if (send_err != ESP_OK || comm_.get_node_state() == espnow::NodeState::RECOVERY_SCAN) {
-            if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
-                ESP_LOGI(TAG, "Channel recovered! Retrying report send...");
-                send_report();
-                rtos_.task_delay(pdMS_TO_TICKS(50));
-            }
-        }
-
-        // 8. Handle OTA triggers & firmware verification
-        if (ota_triggered_) {
-            process_pending_ota();
-        }
-
-        if (pending_firmware_verify_) {
-            check_firmware();
-        }
-
-        // 9. Calculate sleep time & determine GPIO wakeup status
-        uint64_t sleep_time_us = (override_sleep_us > 0) ? override_sleep_us : logic_.calculate_sleep_time_us(stats_);
-        stats_.gpio_wakeup_enabled = float_switch_.should_enable_wakeup();
-
-        // 10. Save updated state (Core & Tank Storage)
-        save_persistent_state();
-
-        // 11. Enter deep sleep (or delay if enter_sleep is false for testing)
-        UBaseType_t hwm_bytes = rtos_.task_get_stack_high_water_mark();
-        ESP_LOGI(
-            TAG,
-            "Main task stack high water mark before sleep: %u bytes remaining",
-            static_cast<unsigned int>(hwm_bytes));
-
-        if (enter_sleep) {
-            enter_deep_sleep(sleep_time_us);
-        }
-        rtos_.task_delay(pdMS_TO_TICKS(5000));
     }
+
+    // 3. Perform ultrasonic reading (wait remaining warmup if needed)
+    ultrasonic::Reading reading;
+    if (pwr_err == ESP_OK) {
+        int64_t elapsed_ms = (sys_timer_.get_time_us() / 1000) - power_on_time_ms;
+        if (elapsed_ms < SENSOR_WARMUP_MS) {
+            uint32_t remaining_warmup = SENSOR_WARMUP_MS - static_cast<uint32_t>(elapsed_ms);
+            rtos_.task_delay(pdMS_TO_TICKS(remaining_warmup));
+        }
+        reading = sensor_.read_level(DEFAULT_SAMPLE_COUNT);
+        retry_reading_if_needed(reading);
+        power_.turn_off();
+    }
+    else { // if sensor was not powered on
+        ESP_LOGE(TAG, "Failed to power on sensor: %s", esp_err_to_name(pwr_err));
+
+        reading.result = ultrasonic::UsResult::HW_FAULT;
+        reading.cm = 0;
+
+        session_healthy_ = false;
+    }
+
+    // 4. Process application logic & update stats
+    logic_.process_reading(reading, stats_);
+    logic_.update_operation_mode(stats_);
+
+    ESP_LOGI(
+        TAG,
+        "Distance: %.1f - UsResult %d - Permile: %d | Battery: %d | FillState: %d",
+        reading.cm,
+        static_cast<int>(reading.result),
+        stats_.level_permille,
+        stats_.last_battery_mv,
+        static_cast<int>(stats_.fill_state));
+
+    // 5. Transmit report to Hub (enqueues packet to TX task)
+    esp_err_t send_err = send_report();
+
+    // 6. Listen for incoming messages (gives time for background TX & ACK processing)
+    uint64_t override_sleep_us = listen_for_messages(LISTEN_WINDOW_MS);
+
+    // 7. Check comm status (if TX failed or node entered RECOVERY_SCAN, wait for channel recovery & retry)
+    if (send_err != ESP_OK || comm_.get_node_state() == espnow::NodeState::RECOVERY_SCAN) {
+        if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
+            ESP_LOGI(TAG, "Channel recovered! Retrying report send...");
+            send_report();
+            rtos_.task_delay(pdMS_TO_TICKS(50));
+        }
+    }
+
+    // 8. Handle OTA triggers & firmware verification
+    if (ota_triggered_) {
+        process_pending_ota();
+    }
+
+    if (pending_firmware_verify_) {
+        check_firmware();
+    }
+
+    // 9. Calculate sleep time & determine GPIO wakeup status
+    uint64_t sleep_time_us = (override_sleep_us > 0) ? override_sleep_us : logic_.calculate_sleep_time_us(stats_);
+    stats_.gpio_wakeup_enabled = float_switch_.should_enable_wakeup();
+
+    // 10. Save updated state (Core & Tank Storage)
+    save_persistent_state();
+
+    // 11. Enter deep sleep (or delay if enter_sleep is false for testing)
+    UBaseType_t hwm_bytes = rtos_.task_get_stack_high_water_mark();
+    ESP_LOGI(
+        TAG, "Main task stack high water mark before sleep: %u bytes remaining", static_cast<unsigned int>(hwm_bytes));
+
+    if (enter_sleep) {
+        enter_deep_sleep(sleep_time_us);
+        return false;
+    }
+    return true;
 }
 
 // =====================================================================

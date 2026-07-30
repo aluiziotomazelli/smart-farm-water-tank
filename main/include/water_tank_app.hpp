@@ -56,7 +56,7 @@ public:
     /**
      * @brief Execute the main application loop.
      */
-    void run(bool enter_sleep = true);
+    bool run(bool enter_sleep = true);
 
     /** @copydoc IOtaTriggerListener::on_ota_triggered */
     void on_ota_triggered(OtaTriggerSource source) override;
@@ -93,7 +93,7 @@ protected:
 
     bool floatswitch_tank_full_ = false;
 
-private:
+protected:
     void process_node_state();
     esp_err_t send_report();
     void retry_reading_if_needed(ultrasonic::Reading& reading);
