@@ -1,30 +1,128 @@
 #include "water_tank_nvs.hpp"
+#include "core_types.hpp"
 #include "esp_log.h"
+#include <cstdint>
 #include <cstring>
 
-static const char *TAG = "WaterTankNvs";
+#include "esp_attr.h"
+#include "esp_rom_crc.h"
+#include "water_tank_stats.hpp"
+#include <type_traits>
 
-WaterTankNvs::WaterTankNvs(idf_hals::INvsHAL &hal)
-    : NvsCore("water_tank", hal)
+static const char* TAG = "WaterTankNvs";
+
+template <typename T> inline uint32_t calculate_crc(const T& data)
+{
+    static_assert(std::is_standard_layout_v<T>, "T must be standard_layout for safe offset calculation");
+    static_assert(offsetof(T, crc) != 0, "T must have a non-first crc field");
+    return esp_rom_crc32_le(0, reinterpret_cast<const uint8_t*>(&data), offsetof(T, crc));
+}
+
+WaterTankNvs::WaterTankNvs(IPersistenceBackend& rtc_stats, IPersistenceBackend& nvs_stats)
+    : rtc_stats_(rtc_stats)
+    , nvs_stats_(nvs_stats)
 {
 }
 
-esp_err_t WaterTankNvs::loadAppData()
+esp_err_t WaterTankNvs::load_app_data(WaterTankStats& stats)
 {
-    return loadStruct("tank_stats", stats);
+    WaterTankStats temp_stats = {};
+
+    esp_err_t ret = load_raw_app_data(temp_stats);
+    if (ret == ESP_OK) {
+        stats = temp_stats;
+    }
+
+    return ret;
 }
 
-esp_err_t WaterTankNvs::saveAppData()
+esp_err_t WaterTankNvs::save_app_data(const WaterTankStats& stats, bool force_nvs_commit)
 {
-    return saveStruct("tank_stats", stats);
+    WaterTankStats new_stats = stats;
+    new_stats.magic = WaterTankStats::MAGIC;
+
+    bool is_dirty = is_app_data_dirty(new_stats);
+
+    // Calculate CRC to save if data is dirty
+    new_stats.crc = calculate_crc(new_stats);
+
+    // If data is not dirty and force_nvs_commit is false, return
+    if (!is_dirty && !force_nvs_commit) {
+        return ESP_OK;
+    }
+
+    // If is dirty, save to RTC
+    if (is_dirty) {
+        rtc_stats_.save(&new_stats, sizeof(new_stats));
+        ESP_LOGI(TAG, "Saved tank stats to RTC");
+    }
+
+    // If NVS commit is forced, save to nvs
+    if (force_nvs_commit) {
+        esp_err_t err = nvs_stats_.save(&new_stats, sizeof(new_stats));
+        if (err == ESP_OK) {
+            ESP_LOGI(TAG, "Saved tank stats to NVS");
+            return ESP_OK;
+        }
+        else {
+            ESP_LOGE(TAG, "Failed to save tank stats to NVS: %s", esp_err_to_name(err));
+            return err;
+        }
+    }
+    return ESP_OK;
 }
 
-void WaterTankNvs::setAppDefaults()
+// =================================================
+// Private methods
+// =================================================
+
+esp_err_t WaterTankNvs::load_raw_app_data(WaterTankStats& data_out)
 {
-    ESP_LOGI(TAG, "Setting application default values");
-    stats.reset();
-    
-    // Core identity defaults
-    core_.node_id = farm::NodeId::WATER_TANK;
-    core_.node_type = farm::NodeType::SENSOR;
+    esp_err_t ret;
+
+    ret = rtc_stats_.load(&data_out, sizeof(data_out));
+    if (ret == ESP_OK) {
+        ret = validate_app_data(data_out);
+        if (ret == ESP_OK) {
+            ESP_LOGD(TAG, "Loaded tank stats from RTC memory");
+            return ESP_OK;
+        }
+    }
+
+    ret = nvs_stats_.load(&data_out, sizeof(data_out));
+    if (ret == ESP_OK) {
+        ret = validate_app_data(data_out);
+        if (ret == ESP_OK) {
+            // Sync valid NVS data back to RTC
+            rtc_stats_.save(&data_out, sizeof(data_out));
+            ESP_LOGD(TAG, "Loaded tank stats from NVS flash");
+            return ESP_OK;
+        }
+    }
+    return ret;
+}
+
+esp_err_t WaterTankNvs::validate_app_data(const WaterTankStats& data)
+{
+    if (data.magic != WaterTankStats::MAGIC) {
+        ESP_LOGW(TAG, "Invalid magic number in tank stats: 0x%04X", data.magic);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (data.crc != calculate_crc<WaterTankStats>(data)) {
+        ESP_LOGW(TAG, "CRC mismatch in tank stats: 0x%08X", data.crc);
+        return ESP_ERR_INVALID_CRC;
+    }
+    return ESP_OK;
+}
+
+bool WaterTankNvs::is_app_data_dirty(const WaterTankStats& new_data) const
+{
+    WaterTankStats current_data;
+
+    if (rtc_stats_.load(&current_data, sizeof(current_data)) != ESP_OK) {
+        return true; // Assume dirty if we can't load current data from RTC
+    }
+
+    return (current_data != new_data);
 }

@@ -1,0 +1,30 @@
+07-15
+Sensor installation with horizontal bracket v1
+ - minimum distance not configured, sensor marking 20.2-20.3 when obstructed at very close range
+ - driver issue - interping delay not being aplied in some erros.
+
+07-16
+Late afternoon - sensor installation with horizontal bracket v2 (aluminum)
+
+07-17
+01:11 - SENSOR_MIN_DISTANCE_CM changed to 25 cm
+
+07-19
+Temporary reflective sensor v3 instaled with offset 29.5cm (causing OOR error due to reflection from the wooden box that protrudes from the water tank)
+16:50 - pump turned on
+17:06 - pump turned off
+
+07-20
+16:12 - Driver issue corrected (return without interping delay)
+18:37 - Sensor positioned closer to the water, the OOR error no longer occurs.
+
+07-21
+10:49 pump turned off, "stable" drainage, same number of taps turned on until the end
+11:40 water running out at the taps, minimum water level to be drained from the tank.
+11:45 pump turned on to fill to the maximum level, regulated by the current mechanical float
+
+07-23
+Morning - Final reflective sensor installation, v4
+
+07-24
+09:19 - float switch activated automatically with the current float

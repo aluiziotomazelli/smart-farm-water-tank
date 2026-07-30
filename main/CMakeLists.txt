@@ -9,8 +9,7 @@ idf_component_register(
         "include"
         "."
     REQUIRES
-        nvs_core
-        common
+        smart-farm-common
         ultrasonic_sensor
         floatswitch
         espnow_manager
@@ -18,5 +17,7 @@ idf_component_register(
         wifi_manager
         ota_manager
         battery_monitor
+        time_manager
         idf_hals
+        udp_logger
 )

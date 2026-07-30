@@ -1,3 +1,5 @@
+// main/include/ultrasonic_adapter.hpp
+
 #pragma once
 #include "interfaces/i_level_sensor.hpp"
 #include "us_sensor.hpp"
@@ -18,11 +20,10 @@ public:
     {
     }
 
+    esp_err_t init() override { return sensor_.init(); }
+
     /** @copydoc ILevelSensor::read_level() */
-    ultrasonic::Reading read_level(uint8_t sample_count) override
-    {
-        return sensor_.read_distance(sample_count);
-    }
+    ultrasonic::Reading read_level(uint8_t sample_count) override { return sensor_.read_distance(sample_count); }
 
 private:
     ultrasonic::IUsSensor& sensor_;

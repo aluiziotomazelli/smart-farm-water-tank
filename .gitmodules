@@ -33,3 +33,6 @@
 [submodule "components/idf_hals"]
 	path = components/idf_hals
 	url = https://github.com/aluiziotomazelli/idf_hals.git
+[submodule "components/time_manager"]
+	path = components/time_manager
+	url = https://github.com/aluiziotomazelli/time_manager.git

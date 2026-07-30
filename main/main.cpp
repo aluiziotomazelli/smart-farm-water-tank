@@ -9,12 +9,11 @@
 #include "us_types.hpp"
 #include "water_tank_app.hpp"
 #include "water_tank_nvs.hpp"
-#include "water_tank_storage_adapter.hpp"
+#include "persistence_backend.hpp"
 #include "secrets.hpp"
 #include "ota_manager.hpp"
 #include "button_ota_trigger.hpp"
 #include "espnow_ota_trigger.hpp"
-#include "ota_controller.hpp"
 #include "wifi_manager.hpp"
 
 #include "battery_monitor.hpp"
@@ -27,8 +26,17 @@
 #include "hal_timer.hpp"
 #include "hal_nvs.hpp"
 #include "hal_freertos.hpp"
+#include "farm_protocol_types.hpp"
+#include <cstdint>
+
+#include "freertos/ringbuf.h"
+#include "lwip/sockets.h"
 
 static const char* TAG = "main";
+
+static constexpr bool IS_LOGGING = false;
+static constexpr bool ENTER_SLEEP = true;
+static constexpr uint16_t LOOP_DELAY_IF_NOT_SLEEPING = 5000;
 
 // Production Configuration for XIAO-ESP32-C3 Mini Board
 static constexpr gpio_num_t POWER_GPIO = GPIO_NUM_10;        // D10
@@ -37,6 +45,9 @@ static constexpr gpio_num_t US_ECHO_GPIO = GPIO_NUM_5;       // D3
 static constexpr gpio_num_t FLOAT_SWITCH_GPIO = GPIO_NUM_2;  // D0 need be D0-D3 GPIO 3-5 to enable deep-sleep wake-up
 static constexpr gpio_num_t BATTERY_LEVEL_GPIO = GPIO_NUM_3; // D1
 static constexpr gpio_num_t BOOT_BUTTON_GPIO = GPIO_NUM_9;   // Boot button has no external pad
+
+static constexpr const char* CORE_NVS_KEY = "core";
+static constexpr const char* STATS_NVS_KEY = "tank_stats";
 
 // HAL instances for sharing across components
 static idf_hals::GpioHAL hal_gpio;
@@ -78,25 +89,31 @@ static battery_monitor::BatteryMonitor bat_monitor{adc_reader, monitor_config};
 
 // Ultrasonic Sensor
 ultrasonic::UsConfig us_config{
-    .ping_interval_ms = 70,
+    .ping_interval_ms = 100,
     .ping_duration_us = 20,
-    .timeout_us = 25000,
+    .timeout_us = 13000,
     .filter = ultrasonic::Filter::DOMINANT_CLUSTER,
     .min_distance_cm = SENSOR_MIN_DISTANCE_CM,
     .max_distance_cm = SENSOR_MAX_DISTANCE_CM,
-    .warmup_time_ms = 600};
+    .warmup_time_ms = 0};
 
-static ultrasonic::UsSensor sensor_us{US_TRIG_GPIO, US_ECHO_GPIO, us_config};
+static ultrasonic::UsSensor
+    sensor_us{hal_gpio, hal_timer, hal_sys_rom, hal_freertos, US_TRIG_GPIO, US_ECHO_GPIO, us_config};
 static UltrasonicLevelSensorAdapter sensor_adapter{sensor_us};
 
 // SleepHAL
 static idf_hals::SleepHAL sleep_hw;
 
 // Persistence and App instantiation
-static WaterTankNvs nvs{nvs_hal};
+static RTC_DATA_ATTR CoreStorage g_rtc_core;
+static RtcBackend rtc_core_backend(&g_rtc_core, sizeof(CoreStorage));
+static NvsBackend nvs_core_backend{nvs_hal, CORE_NVS_KEY};
+static NvsCore nvs_core{rtc_core_backend, nvs_core_backend};
 
-// StorageAdapter
-static WaterTankStorageAdapter storage_adapter{nvs};
+static RTC_DATA_ATTR WaterTankStats g_rtc_tank;
+static RtcBackend rtc_stats_backend(&g_rtc_tank, sizeof(WaterTankStats));
+static NvsBackend nvs_stats_backend{nvs_hal, STATS_NVS_KEY};
+static WaterTankNvs nvs_tank{rtc_stats_backend, nvs_stats_backend};
 
 // TankGeometry
 static TankGeometry geometry{SENSOR_OFFSET_CM};
@@ -128,7 +145,7 @@ static OtaConfig ota_config{
     .transport = {.manifest_timeout_ms = 30000, .firmware_timeout_ms = 30000},
     .security = {.allow_http_during_development = true},
     .allow_same_version = false,
-    .restart_on_success = true,
+    .restart_on_success = false,
 };
 static OtaManager ota_manager(ota_deps);
 
@@ -136,119 +153,30 @@ static OtaManager ota_manager(ota_deps);
 static ButtonOtaTrigger btn_trigger(hal_gpio, hal_freertos, BOOT_BUTTON_GPIO, 200);
 static EspNowOtaTrigger espnow_ota_trigger;
 
-// OTA Controller config
-static OtaControllerConfig ota_ctrl_config{
-    .wifi_connect_timeout_ms = 30000,
-    .ota_watchdog_timeout_ms = 120000,
-    .task_stack_size = 4096,
-    .task_priority = 5};
-
-// Setup Hardware
-static QueueHandle_t app_rx_queue = nullptr;
-static esp_err_t setup_hardware()
-{
-    esp_err_t err;
-
-    // WifiManager
-    wifi_manager::WiFiManager& wifi = wifi_manager::WiFiManager::get_instance();
-    if ((err = wifi.init()) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize WiFiManager: %s", esp_err_to_name(err));
-        return err;
-    }
-    // Before wifi.start() — define the credentials for OTA
-    if ((err = wifi.add_credentials(WIFI_SSID, WIFI_PASS)) != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to set WiFi credentials: %s", esp_err_to_name(err));
-        // not fatal: credentials may already be in NVS
-    }
-    if ((err = wifi.start()) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start WiFiManager: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    // FloatSwitch
-    if ((err = float_switch.init()) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize FloatSwitch: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    // NVS
-    if ((err = nvs.init_partition()) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize NVS partition: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    // EspNowManager
-    espnow::EspNowConfig config;
-    config.node_id = static_cast<espnow::NodeId>(farm::NodeId::WATER_TANK);
-    config.node_type = static_cast<espnow::NodeType>(farm::NodeType::SENSOR);
-    app_rx_queue = hal_freertos.queue_create(30, sizeof(espnow::AppMessage));
-    config.app_rx_queue = app_rx_queue;
-    config.wifi_channel = 1;
-
-    espnow::EspNowManager& espnow = espnow::EspNowManager::instance();
-    if ((err = espnow.init(config)) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize EspNowManager: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    // PowerControl
-    if ((err = power.init()) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize PowerControl: %s", esp_err_to_name(err));
-        return err;
-    }
-    power.turn_on();
-
-    // UsSensor
-    if ((err = sensor_us.init()) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize UsSensor: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    // OTA Manager
-    if (!ota_manager.init(ota_config)) {
-        ESP_LOGE(TAG, "Failed to initialize OTA Manager");
-        return ESP_FAIL;
-    }
-
-    return ESP_OK;
-}
+#include "udp_logger.hpp"
 
 extern "C" void app_main()
 {
     ESP_LOGI(TAG, "Initializing Smart Farm Water Tank...");
 
-    if (setup_hardware() != ESP_OK) {
-        ESP_LOGE(TAG, "Critical hardware initialization failure. Entering safe deep sleep for 5 minutes.");
-        sleep_hw.enable_timer_wakeup(5ULL * 60ULL * 1000ULL * 1000ULL);
-        sleep_hw.deep_sleep_start();
-        return;
-    }
+    // Initialize NVS partition first so components using NVS (like WiFi / Storage) can operate
+    // if (nvs.init_partition() != ESP_OK) {
+    //     ESP_LOGE(TAG, "Failed to initialize NVS partition!");
+    // }
+
+    // Create ESP-NOW receive queue
+    QueueHandle_t app_rx_queue = hal_freertos.queue_create(30, sizeof(espnow::AppMessage));
 
     // Retrieve singleton references for DI
     auto& wifi = wifi_manager::WiFiManager::get_instance();
     auto& espnow = espnow::EspNowManager::instance();
 
-    // Verify rollback state on boot
-    if (ota_manager.check_pending_verify()) {
-        ESP_LOGI(TAG, "New firmware pending verification. Confirming as valid.");
-        if (ota_manager.confirm_app_valid()) {
-            ESP_LOGI(TAG, "Firmware confirmed successfully.");
-        }
-        else {
-            ESP_LOGE(TAG, "Failed to confirm firmware. Triggering rollback.");
-            ota_manager.rollback_and_reboot();
-        }
-    }
-
-    // Instantiate and start non-blocking OtaController
-    static OtaController ota_controller(wifi, ota_manager, hal_freertos, ota_ctrl_config);
-    ota_controller.start({&btn_trigger, &espnow_ota_trigger});
-
     // Instantiate app with dependencies
     WaterTankApp app(
+        nvs_core,
+        nvs_tank,
         sensor_adapter,
         float_switch,
-        storage_adapter,
         espnow,
         app_rx_queue,
         power,
@@ -257,10 +185,23 @@ extern "C" void app_main()
         hal_timer,
         hal_freertos,
         logic,
+        wifi,
+        ota_manager,
+        btn_trigger,
         espnow_ota_trigger,
-        ota_controller,
         hal_system);
 
-    // Run the main application flow
-    app.run();
+    // Initialize application state (enable remote logging for field tests)
+
+    if (app.init(IS_LOGGING) != ESP_OK) {
+        ESP_LOGE(TAG, "Critical hardware/application initialization failure. Entering safe deep sleep for 1 minute.");
+        sleep_hw.enable_timer_wakeup(1ULL * 60ULL * 1000ULL * 1000ULL);
+        sleep_hw.deep_sleep_start();
+        return;
+    }
+
+    // Run the main application flow in a loop if not sleeping
+    while (app.run(ENTER_SLEEP)) {
+        hal_freertos.task_delay(pdMS_TO_TICKS(LOOP_DELAY_IF_NOT_SLEEPING));
+    }
 }

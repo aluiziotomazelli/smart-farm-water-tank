@@ -13,4 +13,5 @@ public:
     MOCK_METHOD(bool, check_pending_verify, (), (const, override));
     MOCK_METHOD(bool, confirm_app_valid, (), (override));
     MOCK_METHOD(void, rollback_and_reboot, (), (override));
+    MOCK_METHOD(OtaFailReason, get_last_error, (), (const, override));
 };

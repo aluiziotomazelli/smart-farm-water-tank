@@ -4,7 +4,7 @@ idf_component_register(
         "test_water_tank_geometry.cpp"
         "test_water_tank_logic.cpp"
         "test_water_tank_app.cpp"
-        "test_ota_controller.cpp"
+        "test_water_tank_nvs.cpp"
         "../../../main/src/tank_geometry.cpp"
         "../../../main/src/water_tank_logic.cpp"
         "../../../main/src/water_tank_app.cpp"
@@ -14,23 +14,21 @@ idf_component_register(
         "../../common"
         "../../../main/include"
         "../../../main"
-        "../../../components/wifi_manager/include"
-        "../../../components/espnow_manager/include"
-        "../../../components/power_control/include"
-        "../../../components/battery_monitor/include"
-        "../../../components/battery_monitor/include/interfaces"
         "../../../components/smart-farm-common/host_test/common"
         "../../../components/idf_hals/mocks"
     REQUIRES 
         gtest
-        common
+        smart-farm-common
         ultrasonic_sensor
         floatswitch
         espnow_manager
         power_control
-        nvs_core
         battery_monitor
+        wifi_manager
         idf_hals
+        ota_manager
+        time_manager
+        udp_logger
         WHOLE_ARCHIVE
 )
 

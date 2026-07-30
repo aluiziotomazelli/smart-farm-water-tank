@@ -1,3 +1,4 @@
+// main/include/interfaces/i_level_sensor.hpp
 #pragma once
 #include <cstdint>
 #include "us_types.hpp"
@@ -13,6 +14,13 @@ class ILevelSensor
 {
 public:
     virtual ~ILevelSensor() = default;
+
+    /**
+     * @brief Initializes the sensor.
+     *
+     * @return True if initialization succeeded, false otherwise.
+     */
+    virtual esp_err_t init() = 0;
 
     /**
      * @brief Reads the distance or level from the sensor.

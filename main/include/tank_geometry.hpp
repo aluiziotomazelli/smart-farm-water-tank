@@ -23,6 +23,21 @@
  *   - Entry [N-1].depth_cm to the real depth of the tank bottom from the
  *     drain level.
  * No changes to the interpolation algorithm are needed.
+ *
+ * ## Behavior Profile: Sensor Performance vs. Distance & Pump State
+ * ==============================================================================
+ * Distance   | Pump  | Tank State   | Error Rate | Avg StdDev | Confidence
+ * -----------+-------+--------------+------------+------------+----------------
+ * 30-60 cm   | ON    | Mostly Full  |    0.9%    |  0.63 cm   | Excellent
+ * 60-90 cm   | ON    | Half Full    |    0.0%    |  0.72 cm   | Perfect
+ * 90-120 cm  | ON    | Half Empty   |    4.5%    |  1.77 cm   | Good
+ * 120-150 cm | ON    | Mostly Empty |   21.1%    |  4.07 cm   | Acceptable (turb.)
+ *
+ * 90-120 cm  | OFF   | Draining     |    0.0%    |  0.19 cm   | Perfect
+ * 120-150 cm | OFF   | Draining     |    2.6%    |  0.85 cm   | Excellent
+ * ==============================================================================
+ * Conclusion: Issues only occur with Pump ON + Large Distance (waterfall effect).
+ *             Pump OFF: Excellent performance at any distance.
  */
 class TankGeometry
 {
@@ -35,7 +50,7 @@ public:
      *                         level (e.g. overflow drain). This is the only
      *                         runtime calibration parameter.
      */
-    explicit TankGeometry(uint8_t sensor_offset_cm)
+    explicit TankGeometry(float sensor_offset_cm)
         : offset_cm_(sensor_offset_cm)
     {
     }
@@ -85,7 +100,7 @@ private:
      *
      * Current assumption: drain at 141 cm from base. The top segment has 33 cm total,
      * but only 26 cm to the overflow pipe. We leave a 4 cm safety margin, making the
-     * effective height of the top segment 22 cm. The sensor offset is 28.5 cm in v0.2.0.
+     * effective height of the top segment 22 cm. The sensor offset is 29.5 cm in v0.2.1.
      *
      * Depths measured downward from that level:
      *   [0]   0 cm  → 1000 ppm  (full / drain)
@@ -106,7 +121,7 @@ private:
 
     static constexpr uint8_t LUT_SIZE = sizeof(VOLUME_LUT) / sizeof(VOLUME_LUT[0]);
 
-    const uint8_t offset_cm_; ///< Sensor distance (cm) when tank is at full level.
+    const float offset_cm_; ///< Sensor distance (cm) when tank is at full level.
 
     /**
      * @brief Interpolate volume permille from a depth value using the LUT.
