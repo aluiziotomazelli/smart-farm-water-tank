@@ -27,6 +27,9 @@
 #include "hal_nvs.hpp"
 #include "hal_freertos.hpp"
 #include "farm_protocol_types.hpp"
+#include "time_manager.hpp"
+#include "hal_sntp.hpp"
+#include "hal_system_time.hpp"
 #include <cstdint>
 
 #include "freertos/ringbuf.h"
@@ -56,6 +59,9 @@ static idf_hals::SysRomHAL hal_sys_rom;
 static idf_hals::SystemHAL hal_system;
 static idf_hals::NvsHAL nvs_hal;
 static idf_hals::HalFreertos hal_freertos;
+static idf_hals::HalSntp hal_sntp;
+static idf_hals::HalSystemTime hal_sys_time;
+static time_manager::TimeManager time_mgr{hal_sntp, hal_sys_time};
 
 // PowerControl
 static power_control::PowerControl power{hal_gpio, POWER_GPIO, /*inverted_logic=*/true, /*initial_on=*/false};
@@ -189,7 +195,8 @@ extern "C" void app_main()
         ota_manager,
         btn_trigger,
         espnow_ota_trigger,
-        hal_system);
+        hal_system,
+        time_mgr);
 
     // Initialize application state (enable remote logging for field tests)
 

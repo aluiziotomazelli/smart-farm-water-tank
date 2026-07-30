@@ -18,6 +18,7 @@
 #include "interfaces/i_ota_trigger.hpp"
 #include "interfaces/i_ota_manager.hpp"
 #include "interfaces/i_hal_system.hpp"
+#include "interfaces/i_time_manager.hpp"
 
 /**
  * @class WaterTankApp
@@ -44,7 +45,8 @@ public:
         IOtaManager& ota_manager,
         IOtaTrigger& btn_trigger,
         IOtaTrigger& espnow_trigger,
-        idf_hals::ISystemHAL& system_hal);
+        idf_hals::ISystemHAL& system_hal,
+        time_manager::ITimeManager& time_manager);
 
     /**
      * @brief Initialize application state, dependencies and check OTA status.
@@ -79,6 +81,7 @@ private:
     IOtaTrigger& btn_trigger_;
     IOtaTrigger& espnow_trigger_;
     idf_hals::ISystemHAL& system_hal_;
+    time_manager::ITimeManager& time_manager_;
 
     std::atomic<bool> ota_triggered_{false};
 
@@ -110,12 +113,14 @@ protected:
     void report_ota_failure_and_restore_comm(farm::OtaErrorCode err_code, bool connected_by_us);
 
     esp_err_t init_wifi();
+    esp_err_t init_time_manager();
     esp_err_t init_espnow();
     esp_err_t init_ota_manager();
     esp_err_t init_core_storage();
     esp_err_t create_default_core_storage();
     void process_boot_reasons();
     void process_wakeup_cause();
+    void sync_time_from_espnow(const farm::TimeSyncCommand& cmd);
 
     esp_err_t init_tank_storage();
     esp_err_t create_default_tank_storage();

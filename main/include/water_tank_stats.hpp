@@ -25,7 +25,7 @@ struct WaterTankStats
     // It is no longer used for fill state logic (replaced by last_level_permille).
     float last_distance_cm = 0.0f;
     ultrasonic::UsResult last_result = ultrasonic::UsResult::HW_FAULT;
-    uint32_t sample_uptime_s = 0;
+    uint64_t sample_timestamp_ms = 0;
 
     // --- Counters ---
     uint32_t measure_count = 0;
@@ -73,7 +73,7 @@ struct WaterTankStats
     {
         return level_permille == other.level_permille && last_level_permille == other.last_level_permille &&
                fill_state == other.fill_state && last_distance_cm == other.last_distance_cm &&
-               last_result == other.last_result && sample_uptime_s == other.sample_uptime_s &&
+               last_result == other.last_result && sample_timestamp_ms == other.sample_timestamp_ms &&
                measure_count == other.measure_count && ok_count == other.ok_count && weak_count == other.weak_count &&
                timeout_count == other.timeout_count && out_of_range_count == other.out_of_range_count &&
                high_variance_count == other.high_variance_count &&

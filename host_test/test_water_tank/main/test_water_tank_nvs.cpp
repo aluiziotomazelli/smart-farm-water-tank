@@ -65,7 +65,7 @@ protected:
         stats.fill_state = FillState::FILLING;
         stats.last_distance_cm = 25.0f;
         stats.last_result = ultrasonic::UsResult::OK;
-        stats.sample_uptime_s = 100;
+        stats.sample_timestamp_ms = 100;
 
         stats.measure_count = 10;
         stats.ok_count = 8;

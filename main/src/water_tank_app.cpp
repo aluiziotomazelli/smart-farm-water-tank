@@ -48,7 +48,8 @@ WaterTankApp::WaterTankApp(
     IOtaManager& ota_manager,
     IOtaTrigger& btn_trigger,
     IOtaTrigger& espnow_trigger,
-    idf_hals::ISystemHAL& system_hal)
+    idf_hals::ISystemHAL& system_hal,
+    time_manager::ITimeManager& time_manager)
     : core_storage_(core_storage)
     , tank_storage_(tank_storage)
     , sensor_(sensor)
@@ -66,6 +67,7 @@ WaterTankApp::WaterTankApp(
     , btn_trigger_(btn_trigger)
     , espnow_trigger_(espnow_trigger)
     , system_hal_(system_hal)
+    , time_manager_(time_manager)
 {
 }
 
@@ -92,6 +94,11 @@ esp_err_t WaterTankApp::init(bool is_logging)
     if ((err = init_wifi()) != ESP_OK) {
         session_healthy_ = false;
         ESP_LOGE(TAG, "Failed to initialize WiFiManager: %s", esp_err_to_name(err));
+    }
+
+    if ((err = init_time_manager()) != ESP_OK) {
+        session_healthy_ = false;
+        ESP_LOGE(TAG, "Failed to initialize TimeManager: %s", esp_err_to_name(err));
     }
 
     // 8. Connect WiFi & Remote UDP Logging if requested
@@ -200,6 +207,7 @@ bool WaterTankApp::run(bool enter_sleep)
     }
 
     // 4. Process application logic & update stats
+    stats_.sample_timestamp_ms = time_manager_.is_synchronized() ? time_manager_.get_timestamp_ms() : 0;
     logic_.process_reading(reading, stats_);
     logic_.update_operation_mode(stats_);
 
@@ -270,6 +278,7 @@ esp_err_t WaterTankApp::send_report()
 
     report.float_switch_is_full = floatswitch_tank_full_;
     report.backup_mode_active = stats_.backup_mode_active;
+    report.unix_time = stats_.sample_timestamp_ms;
 
     esp_err_t err = comm_.send_data(
         espnow::ReservedIds::HUB,
@@ -487,6 +496,14 @@ bool WaterTankApp::process_command(const espnow::AppMessage& msg, uint64_t& out_
                 return true;
             }
         }
+        else if (cmd == farm::CommandType::SYNC_TIME) {
+            if (msg.payload_len >= sizeof(farm::TimeSyncCommand)) {
+                farm::TimeSyncCommand farm_cmd{};
+                memcpy(&farm_cmd, msg.payload, sizeof(farm_cmd));
+
+                sync_time_from_espnow(farm_cmd);
+            }
+        }
     }
     return false;
 }
@@ -586,6 +603,21 @@ esp_err_t WaterTankApp::init_wifi()
     }
     if ((err = wifi_.start()) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start WiFiManager: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t WaterTankApp::init_time_manager()
+{
+    time_manager::TimeManagerConfig config;
+    config.use_dhcp_sntp = false;
+    config.timezone = "<-04>4";
+
+    esp_err_t err = time_manager_.init(config);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize TimeManager: %s", esp_err_to_name(err));
         return err;
     }
 
@@ -768,6 +800,22 @@ void WaterTankApp::process_wakeup_cause()
 
     default:
         core_.last_wake = WakeSource::UNKNOWN;
+    }
+}
+
+void WaterTankApp::sync_time_from_espnow(const farm::TimeSyncCommand& sync_cmd)
+{
+    time_manager::TimeSyncPacket pkt{};
+    pkt.timestamp_ms = sync_cmd.timestamp_ms;
+    pkt.tz_offset_min = sync_cmd.tz_offset_min;
+    pkt.sync_source = time_manager::TimeSyncSource::ESP_NOW;
+    pkt.flags = sync_cmd.flags;
+
+    if (time_manager_.sync_from_time_packet(pkt) == ESP_OK) {
+        core_.has_valid_time = true;
+        core_.last_sync_unix_time_ms = pkt.timestamp_ms;
+        pending_core_commit_ = true;
+        ESP_LOGI(TAG, "Time synch from ESP-NOW: %ld ms", pkt.timestamp_ms);
     }
 }
 
