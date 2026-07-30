@@ -153,12 +153,6 @@ esp_err_t WaterTankApp::init(bool is_logging)
         return ESP_FAIL;
     }
 
-    UBaseType_t hwm_bytes = rtos_.task_get_stack_high_water_mark();
-    ESP_LOGI(
-        TAG,
-        "App init completed. Main task stack high water mark: %u bytes remaining",
-        static_cast<unsigned int>(hwm_bytes));
-
     return ESP_OK;
 }
 
@@ -250,10 +244,6 @@ bool WaterTankApp::run(bool enter_sleep)
     save_persistent_state();
 
     // 11. Enter deep sleep (or delay if enter_sleep is false for testing)
-    UBaseType_t hwm_bytes = rtos_.task_get_stack_high_water_mark();
-    ESP_LOGI(
-        TAG, "Main task stack high water mark before sleep: %u bytes remaining", static_cast<unsigned int>(hwm_bytes));
-
     if (enter_sleep) {
         enter_deep_sleep(sleep_time_us);
         return false;
