@@ -213,12 +213,13 @@ bool WaterTankApp::run(bool enter_sleep)
 
     ESP_LOGI(
         TAG,
-        "Distance: %.1f - UsResult %d - Permile: %d | Battery: %d | FillState: %d",
+        "Distance: %.1f - UsResult %d - Permile: %d | Battery: %d | FillState: %d | Time: %lld",
         reading.cm,
         static_cast<int>(reading.result),
         stats_.level_permille,
         stats_.last_battery_mv,
-        static_cast<int>(stats_.fill_state));
+        static_cast<int>(stats_.fill_state),
+        stats_.sample_timestamp_ms);
 
     // 5. Transmit report to Hub (enqueues packet to TX task)
     esp_err_t send_err = send_report();
@@ -803,22 +804,6 @@ void WaterTankApp::process_wakeup_cause()
     }
 }
 
-void WaterTankApp::sync_time_from_espnow(const farm::TimeSyncCommand& sync_cmd)
-{
-    time_manager::TimeSyncPacket pkt{};
-    pkt.timestamp_ms = sync_cmd.timestamp_ms;
-    pkt.tz_offset_min = sync_cmd.tz_offset_min;
-    pkt.sync_source = time_manager::TimeSyncSource::ESP_NOW;
-    pkt.flags = sync_cmd.flags;
-
-    if (time_manager_.sync_from_time_packet(pkt) == ESP_OK) {
-        core_.has_valid_time = true;
-        core_.last_sync_unix_time_ms = pkt.timestamp_ms;
-        pending_core_commit_ = true;
-        ESP_LOGI(TAG, "Time synch from ESP-NOW: %ld ms", pkt.timestamp_ms);
-    }
-}
-
 esp_err_t WaterTankApp::create_default_core_storage()
 {
     core_.reset();
@@ -826,16 +811,7 @@ esp_err_t WaterTankApp::create_default_core_storage()
     core_.node_type = farm::NodeType::SENSOR;
     core_.power_profile = PowerProfile::DEEP_SLEEP;
 
-    esp_err_t ret = core_storage_.save_core(core_, /*force_nvs_commit=*/true);
-
-    if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "NVS Core not found. Created new default core storage");
-    }
-    else {
-        ESP_LOGE(TAG, "Failed to create new core storage: %s", esp_err_to_name(ret));
-    }
-
-    return ret;
+    return core_storage_.save_core(core_, /*force_nvs_commit=*/true);
 }
 
 esp_err_t WaterTankApp::init_tank_storage()
@@ -862,16 +838,8 @@ esp_err_t WaterTankApp::init_tank_storage()
 esp_err_t WaterTankApp::create_default_tank_storage()
 {
     stats_.reset();
-    esp_err_t ret = tank_storage_.save_app_data(stats_, /*force_nvs_commit=*/true);
 
-    if (ret == ESP_OK) {
-        ESP_LOGW(TAG, "NVS Tank not found. Created new default tank storage");
-    }
-    else {
-        ESP_LOGE(TAG, "Failed to create new tank storage: %s", esp_err_to_name(ret));
-    }
-
-    return ret;
+    return tank_storage_.save_app_data(stats_, /*force_nvs_commit=*/true);
 }
 
 void WaterTankApp::process_node_state()
@@ -886,6 +854,22 @@ void WaterTankApp::process_node_state()
         ESP_LOGI(TAG, "ESP-NOW NodeState PAIRING");
         // Placeholder to wait until pairing is complete
         return;
+    }
+}
+
+void WaterTankApp::sync_time_from_espnow(const farm::TimeSyncCommand& sync_cmd)
+{
+    time_manager::TimeSyncPacket pkt{};
+    pkt.timestamp_ms = sync_cmd.timestamp_ms;
+    pkt.tz_offset_min = sync_cmd.tz_offset_min;
+    pkt.sync_source = time_manager::TimeSyncSource::ESP_NOW;
+    pkt.flags = sync_cmd.flags;
+
+    if (time_manager_.sync_from_time_packet(pkt) == ESP_OK) {
+        core_.has_valid_time = true;
+        core_.last_sync_unix_time_ms = pkt.timestamp_ms;
+        pending_core_commit_ = true;
+        ESP_LOGI(TAG, "Time synch from ESP-NOW: %ld ms", pkt.timestamp_ms);
     }
 }
 

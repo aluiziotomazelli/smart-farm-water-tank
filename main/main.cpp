@@ -163,12 +163,14 @@ static EspNowOtaTrigger espnow_ota_trigger;
 
 extern "C" void app_main()
 {
-    ESP_LOGI(TAG, "Initializing Smart Farm Water Tank...");
+    ESP_LOGW(TAG, "Initializing Smart Farm Water Tank...");
+    hal_freertos.task_delay(pdMS_TO_TICKS(3000));
 
-    // Initialize NVS partition first so components using NVS (like WiFi / Storage) can operate
-    // if (nvs.init_partition() != ESP_OK) {
+    // Initialize NVS partition first so components using NVS(like WiFi / Storage) can operate
+    // if (nvs_hal.flash_init() != ESP_OK) {
     //     ESP_LOGE(TAG, "Failed to initialize NVS partition!");
     // }
+    // nvs_hal.flash_erase();
 
     // Create ESP-NOW receive queue
     QueueHandle_t app_rx_queue = hal_freertos.queue_create(30, sizeof(espnow::AppMessage));

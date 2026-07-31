@@ -14,9 +14,11 @@
 struct WaterTankStats
 {
     static constexpr uint32_t MAGIC = 0x544B; ///< For CRC validation | 0x544B = "TK"
+    static constexpr uint8_t VERSION = 1;
 
     // Magic first (validation)
     uint16_t magic = MAGIC;
+    uint8_t version = VERSION;
 
     // --- Current State ---
     uint16_t level_permille = 0;
@@ -67,16 +69,17 @@ struct WaterTankStats
     {
         *this = {};
         magic = MAGIC;
+        version = VERSION;
     }
 
     bool operator==(const WaterTankStats& other) const
     {
-        return level_permille == other.level_permille && last_level_permille == other.last_level_permille &&
-               fill_state == other.fill_state && last_distance_cm == other.last_distance_cm &&
-               last_result == other.last_result && sample_timestamp_ms == other.sample_timestamp_ms &&
-               measure_count == other.measure_count && ok_count == other.ok_count && weak_count == other.weak_count &&
-               timeout_count == other.timeout_count && out_of_range_count == other.out_of_range_count &&
-               high_variance_count == other.high_variance_count &&
+        return magic == other.magic && version == other.version && level_permille == other.level_permille &&
+               last_level_permille == other.last_level_permille && fill_state == other.fill_state &&
+               last_distance_cm == other.last_distance_cm && last_result == other.last_result &&
+               sample_timestamp_ms == other.sample_timestamp_ms && measure_count == other.measure_count &&
+               ok_count == other.ok_count && weak_count == other.weak_count && timeout_count == other.timeout_count &&
+               out_of_range_count == other.out_of_range_count && high_variance_count == other.high_variance_count &&
                insufficient_samples_count == other.insufficient_samples_count &&
                echo_stuck_count == other.echo_stuck_count && hw_fault_count == other.hw_fault_count &&
                gpio_wakeup_enabled == other.gpio_wakeup_enabled && backup_mode_active == other.backup_mode_active &&

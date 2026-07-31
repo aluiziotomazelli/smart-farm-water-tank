@@ -109,6 +109,11 @@ esp_err_t WaterTankNvs::validate_app_data(const WaterTankStats& data)
         return ESP_ERR_INVALID_ARG;
     }
 
+    if (data.version != WaterTankStats::VERSION) {
+        ESP_LOGW(TAG, "Invalid version in tank stats: %d", data.version);
+        return ESP_ERR_INVALID_VERSION;
+    }
+
     if (data.crc != calculate_crc<WaterTankStats>(data)) {
         ESP_LOGW(TAG, "CRC mismatch in tank stats: 0x%08X", data.crc);
         return ESP_ERR_INVALID_CRC;
