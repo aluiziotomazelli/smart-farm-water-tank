@@ -127,10 +127,8 @@ protected:
         sut = create_app_with_queue(dummy_queue, nullptr, /*auto_init=*/false);
     }
 
-    std::unique_ptr<TestableWaterTankApp> create_app_with_queue(
-        QueueHandle_t rx_queue,
-        IOtaTrigger* espnow_trigger_override = nullptr,
-        bool auto_init = true)
+    std::unique_ptr<TestableWaterTankApp>
+    create_app_with_queue(QueueHandle_t rx_queue, IOtaTrigger* espnow_trigger_override = nullptr, bool auto_init = true)
     {
         IOtaTrigger& espnow_trig = espnow_trigger_override ? *espnow_trigger_override : mock_espnow_trigger;
         auto app = std::make_unique<TestableWaterTankApp>(
@@ -331,11 +329,12 @@ TEST_F(WaterTankAppTest, Init_ResetReasonPanic_IncrementsCrashAndBootCount)
     EXPECT_CALL(mock_system_hal, reset_reason()).WillOnce(Return(ESP_RST_PANIC));
 
     EXPECT_CALL(mock_core_storage, process_boot_reasons(_, ESP_RST_PANIC, _, _))
-        .WillOnce(testing::Invoke([](CoreStorage& core, esp_reset_reason_t, esp_sleep_wakeup_cause_t, bool& pending_commit) {
-            core.crash_count++;
-            core.last_wake = WakeSource::CRASH;
-            pending_commit = true;
-        }));
+        .WillOnce(
+            testing::Invoke([](CoreStorage& core, esp_reset_reason_t, esp_sleep_wakeup_cause_t, bool& pending_commit) {
+                core.crash_count++;
+                core.last_wake = WakeSource::CRASH;
+                pending_commit = true;
+            }));
 
     // Act
     esp_err_t ret = sut->init(false);
@@ -767,10 +766,8 @@ TEST_F(WaterTankAppTest, CheckFirmware_PopulatesCoreVersionOnSuccess)
 
     EXPECT_CALL(mock_ota, confirm_app_valid()).WillOnce(Return(true));
 
-    esp_app_desc_t mock_desc = {};
-    mock_desc.magic_word = ESP_APP_DESC_MAGIC_WORD;
-    snprintf(mock_desc.version, sizeof(mock_desc.version), "1.2.3");
-    EXPECT_CALL(mock_system_hal, get_app_description()).WillRepeatedly(Return(&mock_desc));
+    OtaVersion mock_desc{1, 2, 3};
+    EXPECT_CALL(mock_ota, get_running_version()).WillRepeatedly(Return(mock_desc));
 
     EXPECT_CALL(mock_comm, get_node_state()).WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
     EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).WillOnce(Return(ESP_OK));
