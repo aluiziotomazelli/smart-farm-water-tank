@@ -732,86 +732,32 @@ esp_err_t WaterTankApp::init_core_storage()
 {
     esp_err_t ret = core_storage_.load_core(core_);
 
-    if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "Loaded core storage");
-        core_.boot_count++;
-        process_boot_reasons();
-        return ESP_OK;
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Core storage load failed (%s), recreating default storage", esp_err_to_name(ret));
+
+        CoreStorage default_core = {};
+        default_core.reset();
+        default_core.node_id = farm::NodeId::WATER_TANK;
+        default_core.node_type = farm::NodeType::SENSOR;
+        default_core.power_profile = PowerProfile::DEEP_SLEEP;
+
+        ret = core_storage_.create_default_storage(core_, default_core);
+        if (ret != ESP_OK) {
+            return ret;
+        }
+    }
+    else {
+        ESP_LOGI(TAG, "Loaded core data from storage");
     }
 
-    ESP_LOGW(TAG, "Core storage load failed (%s), recreating default storage", esp_err_to_name(ret));
-    ret = create_default_core_storage();
-    if (ret == ESP_OK) {
-        core_.boot_count++;
-        process_boot_reasons();
-        return ESP_OK;
-    }
+    core_.boot_count++;
+    core_storage_.process_boot_reasons(
+        core_,
+        system_hal_.reset_reason(),
+        sleep_.get_wakeup_cause(),
+        pending_core_commit_);
 
-    ESP_LOGE(TAG, "Failed to initialize core storage: %s", esp_err_to_name(ret));
-    return ret;
-}
-
-void WaterTankApp::process_boot_reasons()
-{
-    esp_reset_reason_t reason = system_hal_.reset_reason();
-    switch (reason) {
-    case ESP_RST_PANIC:
-    case ESP_RST_INT_WDT:
-    case ESP_RST_TASK_WDT:
-    case ESP_RST_WDT:
-    case ESP_RST_BROWNOUT:
-
-        core_.crash_count++;
-        pending_core_commit_ = true;
-        core_.last_wake = WakeSource::CRASH;
-        ESP_LOGW(TAG, "Reset from crash.");
-        break;
-
-    case ESP_RST_POWERON:
-        core_.last_wake = WakeSource::POWER_ON;
-        break;
-
-    case ESP_RST_SW:
-        core_.last_wake = WakeSource::RESTART;
-        break;
-
-    case ESP_RST_DEEPSLEEP:
-        process_wakeup_cause();
-        break;
-
-    default:
-        core_.last_wake = WakeSource::UNKNOWN;
-        break;
-    }
-}
-
-void WaterTankApp::process_wakeup_cause()
-{
-    esp_sleep_wakeup_cause_t cause = sleep_.get_wakeup_cause();
-    switch (cause) {
-    case ESP_SLEEP_WAKEUP_TIMER:
-        core_.last_wake = WakeSource::TIMER;
-        break;
-
-    case ESP_SLEEP_WAKEUP_EXT0:
-    case ESP_SLEEP_WAKEUP_EXT1:
-    case ESP_SLEEP_WAKEUP_GPIO:
-        core_.last_wake = WakeSource::GPIO;
-        break;
-
-    default:
-        core_.last_wake = WakeSource::UNKNOWN;
-    }
-}
-
-esp_err_t WaterTankApp::create_default_core_storage()
-{
-    core_.reset();
-    core_.node_id = farm::NodeId::WATER_TANK;
-    core_.node_type = farm::NodeType::SENSOR;
-    core_.power_profile = PowerProfile::DEEP_SLEEP;
-
-    return core_storage_.save_core(core_, /*force_nvs_commit=*/true);
+    return ESP_OK;
 }
 
 esp_err_t WaterTankApp::init_tank_storage()

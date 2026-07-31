@@ -117,9 +117,6 @@ protected:
     esp_err_t init_espnow();
     esp_err_t init_ota_manager();
     esp_err_t init_core_storage();
-    esp_err_t create_default_core_storage();
-    void process_boot_reasons();
-    void process_wakeup_cause();
     void sync_time_from_espnow(const farm::TimeSyncCommand& cmd);
 
     esp_err_t init_tank_storage();
