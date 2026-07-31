@@ -209,7 +209,7 @@ TEST_F(WaterTankAppTest, Init_FloatSwitchFail_SetsUnhealthySessionAndReturnsErro
 TEST_F(WaterTankAppTest, Init_CoreStorageFail_SetsUnhealthySessionAndReturnsError)
 {
     ON_CALL(mock_core_storage, load_core(_)).WillByDefault(Return(ESP_FAIL));
-    ON_CALL(mock_core_storage, save_core(_, _)).WillByDefault(Return(ESP_FAIL));
+    ON_CALL(mock_core_storage, create_default_storage(_, _)).WillByDefault(Return(ESP_FAIL));
 
     esp_err_t ret = sut->init(false);
 
@@ -273,7 +273,7 @@ TEST_F(WaterTankAppTest, Init_HandlesFirstBoot_CreatesDefaultStorage)
     ON_CALL(mock_tank_storage, load_app_data(_)).WillByDefault(Return(ESP_FAIL));
 
     // Storage init will create default storage and save
-    EXPECT_CALL(mock_core_storage, save_core(_, _)).Times(1);
+    EXPECT_CALL(mock_core_storage, create_default_storage(_, _)).WillOnce(Return(ESP_OK));
     EXPECT_CALL(mock_tank_storage, save_app_data(_, _)).Times(1);
 
     // Act
@@ -285,9 +285,13 @@ TEST_F(WaterTankAppTest, Init_HandlesFirstBoot_CreatesDefaultStorage)
 
 TEST_F(WaterTankAppTest, Init_WakeupByTimer_SetsNormalReadingMode)
 {
-    // Arrange: Mock system reset reason as DEEPSLEEP and wakeup cause as TIMER
     EXPECT_CALL(mock_system_hal, reset_reason()).WillOnce(Return(ESP_RST_DEEPSLEEP));
     EXPECT_CALL(mock_sleep, get_wakeup_cause()).WillOnce(Return(ESP_SLEEP_WAKEUP_TIMER));
+
+    EXPECT_CALL(mock_core_storage, process_boot_reasons(_, ESP_RST_DEEPSLEEP, ESP_SLEEP_WAKEUP_TIMER, _))
+        .WillOnce(testing::Invoke([](CoreStorage& core, esp_reset_reason_t, esp_sleep_wakeup_cause_t, bool&) {
+            core.last_wake = WakeSource::TIMER;
+        }));
 
     // Act
     esp_err_t ret = sut->init(false);
@@ -299,9 +303,13 @@ TEST_F(WaterTankAppTest, Init_WakeupByTimer_SetsNormalReadingMode)
 
 TEST_F(WaterTankAppTest, Init_WakeupByGpio_SetsFloatSwitchTriggeredMode)
 {
-    // Arrange: Mock system reset reason as DEEPSLEEP and wakeup cause as GPIO
     EXPECT_CALL(mock_system_hal, reset_reason()).WillOnce(Return(ESP_RST_DEEPSLEEP));
     EXPECT_CALL(mock_sleep, get_wakeup_cause()).WillOnce(Return(ESP_SLEEP_WAKEUP_GPIO));
+
+    EXPECT_CALL(mock_core_storage, process_boot_reasons(_, ESP_RST_DEEPSLEEP, ESP_SLEEP_WAKEUP_GPIO, _))
+        .WillOnce(testing::Invoke([](CoreStorage& core, esp_reset_reason_t, esp_sleep_wakeup_cause_t, bool&) {
+            core.last_wake = WakeSource::GPIO;
+        }));
 
     // Act
     esp_err_t ret = sut->init(false);
@@ -321,6 +329,13 @@ TEST_F(WaterTankAppTest, Init_ResetReasonPanic_IncrementsCrashAndBootCount)
     }));
 
     EXPECT_CALL(mock_system_hal, reset_reason()).WillOnce(Return(ESP_RST_PANIC));
+
+    EXPECT_CALL(mock_core_storage, process_boot_reasons(_, ESP_RST_PANIC, _, _))
+        .WillOnce(testing::Invoke([](CoreStorage& core, esp_reset_reason_t, esp_sleep_wakeup_cause_t, bool& pending_commit) {
+            core.crash_count++;
+            core.last_wake = WakeSource::CRASH;
+            pending_commit = true;
+        }));
 
     // Act
     esp_err_t ret = sut->init(false);
