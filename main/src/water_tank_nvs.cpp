@@ -11,13 +11,6 @@
 
 static const char* TAG = "WaterTankNvs";
 
-template <typename T> inline uint32_t calculate_crc(const T& data)
-{
-    static_assert(std::is_standard_layout_v<T>, "T must be standard_layout for safe offset calculation");
-    static_assert(offsetof(T, crc) != 0, "T must have a non-first crc field");
-    return esp_rom_crc32_le(0, reinterpret_cast<const uint8_t*>(&data), offsetof(T, crc));
-}
-
 WaterTankNvs::WaterTankNvs(IPersistenceBackend& rtc_stats, IPersistenceBackend& nvs_stats)
     : rtc_stats_(rtc_stats)
     , nvs_stats_(nvs_stats)

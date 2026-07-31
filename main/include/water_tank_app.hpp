@@ -123,7 +123,6 @@ protected:
     void sync_time_from_espnow(const farm::TimeSyncCommand& cmd);
 
     esp_err_t init_tank_storage();
-    esp_err_t create_default_tank_storage();
     void check_firmware();
     esp_err_t connect_wifi_with_retry(uint8_t max_attempts = 2);
 

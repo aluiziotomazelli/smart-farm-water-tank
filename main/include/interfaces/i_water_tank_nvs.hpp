@@ -4,7 +4,7 @@
 #include "water_tank_stats.hpp"
 
 /**
- * @class IWaterTankStorage
+ * @class IWaterTankNvs
  * @brief Interface for persisting water tank application state and statistics.
  *
  * Abstracts both NVS and RTC memory storage, allowing the logic to be tested

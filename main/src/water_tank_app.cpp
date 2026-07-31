@@ -825,7 +825,8 @@ esp_err_t WaterTankApp::init_tank_storage()
     }
 
     ESP_LOGW(TAG, "Tank storage load failed (%s), recreating default storage", esp_err_to_name(ret));
-    ret = create_default_tank_storage();
+    stats_.reset();
+    ret = tank_storage_.save_app_data(stats_, /*force_nvs_commit=*/true);
     if (ret == ESP_OK) {
         stats_.cycles_since_nvs_commit++;
         return ESP_OK;
@@ -833,13 +834,6 @@ esp_err_t WaterTankApp::init_tank_storage()
 
     ESP_LOGE(TAG, "Failed to initialize tank storage: %s", esp_err_to_name(ret));
     return ret;
-}
-
-esp_err_t WaterTankApp::create_default_tank_storage()
-{
-    stats_.reset();
-
-    return tank_storage_.save_app_data(stats_, /*force_nvs_commit=*/true);
 }
 
 void WaterTankApp::process_node_state()

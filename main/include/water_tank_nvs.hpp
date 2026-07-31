@@ -5,6 +5,9 @@
 #include "interfaces/i_water_tank_nvs.hpp"
 #include "water_tank_stats.hpp"
 
+#include <type_traits>
+#include "esp_rom_crc.h"
+
 /**
  * @class WaterTankNvs
  * @brief Persistent storage handler for the Water Tank application.
