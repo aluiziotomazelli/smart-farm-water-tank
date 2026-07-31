@@ -46,14 +46,14 @@ project(test_water_tank)
 
 # Set the patterns to extract from the binary
 set(EXTRACT_PATTERNS_test_water_tank 
-    "*/main/*"
-    "*/components/smart-farm-common/common/*"
+    "*/main/src/*"
 )
 
 # Set the patterns to remove from the binary
 set(REMOVE_PATTERNS_test_water_tank 
     "*/main/include/*"
-    "*/components/smart-farm-common/common/include/*"
+    "*host_test/*"
+    "*build/*"
 )
 
 # Include common coverage logic
