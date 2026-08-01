@@ -10,7 +10,6 @@
 #include "core_types.hpp"
 #include "farm_protocol_types.hpp"
 #include "protocol_types.hpp"
-#include "version_helper.hpp"
 
 #include "udp_logger.hpp"
 #include "secrets.hpp"
@@ -24,10 +23,13 @@ static constexpr uint32_t NVS_COMMIT_INTERVAL = 10;
 
 static constexpr uint32_t RECOVERY_SCAN_WAIT_MS =
     espnow::SCAN_CHANNEL_TIMEOUT_MS * espnow::SCAN_CHANNEL_ATTEMPTS * 13 + 200;
+static constexpr uint32_t PAIRING_TIMEOUT_MS = 60000;
 
 static constexpr uint16_t CONNECT_WIFI_TIMEOUT_MS = 15000;
 static constexpr uint16_t DISCONNECT_WIFI_TIMEOUT_MS = 2000;
 static constexpr uint32_t OTA_WATCHDOG_TIMEOUT_MS = 120000;
+
+static constexpr uint8_t HUB_MAC_ADRESS[] = {HUB_MAC_0, HUB_MAC_1, HUB_MAC_2, HUB_MAC_3, HUB_MAC_4, HUB_MAC_5};
 
 static const char* TAG = "WaterTankApp";
 
@@ -110,7 +112,7 @@ esp_err_t WaterTankApp::init(bool is_logging)
         }
     }
 
-    auto version = get_ota_version();
+    auto version = ota_manager_.get_running_version();
     if (version.has_value()) {
         ESP_LOGI(TAG, "Firmware version: %d.%d.%d", version->major, version->minor, version->patch);
     }
@@ -439,6 +441,26 @@ bool WaterTankApp::wait_for_comm_ready(uint32_t timeout_ms)
     return true;
 }
 
+void WaterTankApp::wait_for_pairing(uint32_t timeout_ms)
+{
+    constexpr uint32_t POLL_DELAY_MS = 100;
+    int64_t deadline_ms = (sys_timer_.get_time_us() / 1000) + timeout_ms;
+
+    espnow::NodeState state = comm_.get_node_state();
+
+    while ((sys_timer_.get_time_us() / 1000) < deadline_ms) {
+        rtos_.task_delay(pdMS_TO_TICKS(POLL_DELAY_MS));
+        state = comm_.get_node_state();
+
+        if (state == espnow::NodeState::OPERATIONAL) {
+            return;
+        }
+    }
+    if (state != espnow::NodeState::OPERATIONAL) {
+        ESP_LOGE(TAG, "ESP-NOW NodeState NOT PAIRED after wait");
+    }
+}
+
 uint64_t WaterTankApp::listen_for_messages(uint32_t timeout_ms)
 {
     uint64_t override_sleep_us = 0;
@@ -687,7 +709,7 @@ void WaterTankApp::check_firmware()
     // If we get here, the firmware is valid and confirme
     pending_firmware_verify_ = false;
 
-    auto version = get_ota_version();
+    auto version = ota_manager_.get_running_version();
     if (version.has_value()) {
         core_.fw_major = version->major;
         core_.fw_minor = version->minor;
@@ -752,10 +774,7 @@ esp_err_t WaterTankApp::init_core_storage()
 
     core_.boot_count++;
     core_storage_.process_boot_reasons(
-        core_,
-        system_hal_.reset_reason(),
-        sleep_.get_wakeup_cause(),
-        pending_core_commit_);
+        core_, system_hal_.reset_reason(), sleep_.get_wakeup_cause(), pending_core_commit_);
 
     return ESP_OK;
 }
@@ -792,7 +811,12 @@ void WaterTankApp::process_node_state()
 
     if (state == espnow::NodeState::PAIRING || state == espnow::NodeState::PAIRING_SCAN) {
         ESP_LOGI(TAG, "ESP-NOW NodeState PAIRING");
-        // Placeholder to wait until pairing is complete
+        esp_err_t ret = comm_.add_peer(espnow::ReservedIds::HUB, HUB_MAC_ADRESS, espnow::ReservedTypes::HUB, 0);
+        if (ret == ESP_OK) {
+            ESP_LOGW(TAG, "HUB added as peer");
+            return;
+        }
+        wait_for_pairing(PAIRING_TIMEOUT_MS);
         return;
     }
 }
@@ -819,7 +843,7 @@ esp_err_t WaterTankApp::send_ota_report(farm::OtaExecResult result, farm::OtaErr
     report.result = result;
     report.error_code = error_code;
 
-    auto version = get_ota_version();
+    auto version = ota_manager_.get_running_version();
     if (version.has_value()) {
         report.fw_major = version->major;
         report.fw_minor = version->minor;
@@ -834,15 +858,6 @@ esp_err_t WaterTankApp::send_ota_report(farm::OtaExecResult result, farm::OtaErr
         sizeof(report),
         true // require_ack
     );
-}
-
-std::optional<OtaVersion> WaterTankApp::get_ota_version() const
-{
-    const esp_app_desc_t* app_info = system_hal_.get_app_description();
-    if (app_info != nullptr && app_info->magic_word == ESP_APP_DESC_MAGIC_WORD) {
-        return VersionHelper::parse(app_info->version);
-    }
-    return std::nullopt;
 }
 
 farm::OtaErrorCode WaterTankApp::map_ota_fail_reason(OtaFailReason reason) const

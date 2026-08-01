@@ -1,24 +1,26 @@
 #pragma once
 
+#include <atomic>
+#include <optional>
+
 #include "interfaces/i_hal_sleep.hpp"
 #include "interfaces/i_level_sensor.hpp"
-#include "i_espnow_manager.hpp"
 #include "interfaces/i_nvs_core.hpp"
+#include "i_espnow_manager.hpp"
 #include "interfaces/i_water_tank_nvs.hpp"
 #include "interfaces/i_power_control.hpp"
 #include "interfaces/i_wifi_manager.hpp"
-#include "water_tank_logic.hpp"
-#include "water_tank_stats.hpp"
 #include "i_float_switch.hpp" // Adding component include
 #include "interfaces/i_battery_monitor.hpp"
 #include "interfaces/i_hal_timer.hpp"
 #include "interfaces/i_hal_freertos.hpp"
-#include <atomic>
-#include <optional>
 #include "interfaces/i_ota_trigger.hpp"
 #include "interfaces/i_ota_manager.hpp"
 #include "interfaces/i_hal_system.hpp"
 #include "interfaces/i_time_manager.hpp"
+
+#include "water_tank_logic.hpp"
+#include "water_tank_stats.hpp"
 
 /**
  * @class WaterTankApp
@@ -102,6 +104,7 @@ protected:
     void retry_reading_if_needed(ultrasonic::Reading& reading);
     farm::SensorStatus map_status(ultrasonic::UsResult result);
     bool wait_for_comm_ready(uint32_t timeout_ms);
+    void wait_for_pairing(uint32_t timeout_ms);
     uint64_t listen_for_messages(uint32_t timeout_ms);
     void process_pending_ota();
     void enter_deep_sleep(uint64_t sleep_time_us);
@@ -122,6 +125,4 @@ protected:
     esp_err_t init_tank_storage();
     void check_firmware();
     esp_err_t connect_wifi_with_retry(uint8_t max_attempts = 2);
-
-    std::optional<OtaVersion> get_ota_version() const;
 };
