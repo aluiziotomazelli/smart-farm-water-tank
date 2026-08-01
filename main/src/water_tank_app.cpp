@@ -833,7 +833,7 @@ void WaterTankApp::sync_time_from_espnow(const farm::TimeSyncCommand& sync_cmd)
         core_.has_valid_time = true;
         core_.last_sync_unix_time_ms = pkt.timestamp_ms;
         pending_core_commit_ = true;
-        ESP_LOGI(TAG, "Time synch from ESP-NOW: %ld ms", pkt.timestamp_ms);
+        ESP_LOGI(TAG, "Time synch from ESP-NOW: %llu ms", static_cast<unsigned long long>(pkt.timestamp_ms));
     }
 }
 
