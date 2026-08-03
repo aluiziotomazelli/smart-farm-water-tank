@@ -275,17 +275,15 @@ esp_err_t WaterTankApp::send_report()
     report.battery_mv = stats_.last_battery_mv;
     report.battery_percent = stats_.last_battery_percent;
     report.battery_state = stats_.last_battery_state;
-    uint8_t status_val = static_cast<uint8_t>(map_status(stats_.last_result));
-    status_val = (status_val == 0xFF) ? 0x0F : (status_val & 0x0F);
-    report.status = static_cast<farm::SensorStatus>(status_val | (static_cast<uint8_t>(stats_.fill_state) << 4));
-
+    farm::SensorStatus status_val = map_status(stats_.last_result);
+    report.status = status_val;
     report.float_switch_is_full = floatswitch_tank_full_;
     report.backup_mode_active = stats_.backup_mode_active;
     report.unix_time = stats_.sample_timestamp_ms;
 
     esp_err_t err = comm_.send_data(
         espnow::ReservedIds::HUB,
-        static_cast<uint8_t>(farm::PayloadType::WATER_LEVEL_REPORT),
+        static_cast<espnow::PayloadType>(farm::PayloadType::WATER_LEVEL_REPORT),
         &report,
         sizeof(report),
         true // require_ack
@@ -730,19 +728,21 @@ esp_err_t WaterTankApp::connect_wifi_with_retry(uint8_t max_attempts)
         return ESP_OK;
     }
 
+    static constexpr uint16_t DELAY_BETWEEN_ATTEMPTS_MS = 1500;
     esp_err_t err = ESP_FAIL;
     for (uint8_t attempt = 1; attempt <= max_attempts; ++attempt) {
-        ESP_LOGI(TAG, "WiFi connection attempt %u/%u...", attempt, max_attempts);
+        ESP_LOGI(TAG, "Connecting to WiFi (attempt %u/%u)...", attempt, max_attempts);
         err = wifi_.connect(CONNECT_WIFI_TIMEOUT_MS);
         if (err == ESP_OK) {
-            ESP_LOGI(TAG, "WiFi connected successfully.");
+            ESP_LOGI(TAG, "WiFi connected successfully");
             return ESP_OK;
         }
 
         ESP_LOGW(TAG, "WiFi connection attempt %u failed: %s", attempt, esp_err_to_name(err));
         if (attempt < max_attempts) {
             wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
-            rtos_.task_delay(pdMS_TO_TICKS(500));
+            uint32_t delay_ms = DELAY_BETWEEN_ATTEMPTS_MS * attempt;
+            rtos_.task_delay(pdMS_TO_TICKS(delay_ms));
         }
     }
 
