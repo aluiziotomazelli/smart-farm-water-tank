@@ -275,9 +275,7 @@ esp_err_t WaterTankApp::send_report()
     report.battery_mv = stats_.last_battery_mv;
     report.battery_percent = stats_.last_battery_percent;
     report.battery_state = stats_.last_battery_state;
-    farm::SensorStatus status_val = map_status(stats_.last_result);
-    report.status = status_val;
-    report.float_switch_is_full = floatswitch_tank_full_;
+    report.status = map_status(stats_.last_result);
     report.backup_mode_active = stats_.backup_mode_active;
     report.unix_time = stats_.sample_timestamp_ms;
 
