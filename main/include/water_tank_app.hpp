@@ -70,7 +70,7 @@ private:
     IWaterTankNvs& tank_storage_;
     ILevelSensor& sensor_;
     floatswitch::IFloatSwitch& float_switch_;
-    espnow::IEspNowManager& comm_;
+    espnow::IEspNowManager& espnow_;
     QueueHandle_t rx_queue_;
     power_control::IPowerControl& power_;
     idf_hals::ISleepHAL& sleep_;
@@ -121,6 +121,7 @@ protected:
     esp_err_t init_ota_manager();
     esp_err_t init_core_storage();
     void sync_time_from_espnow(const farm::TimeSyncCommand& cmd);
+    esp_err_t request_time_sync();
 
     esp_err_t init_tank_storage();
     void check_firmware();

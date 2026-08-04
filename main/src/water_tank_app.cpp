@@ -56,7 +56,7 @@ WaterTankApp::WaterTankApp(
     , tank_storage_(tank_storage)
     , sensor_(sensor)
     , float_switch_(float_switch)
-    , comm_(comm)
+    , espnow_(comm)
     , rx_queue_(rx_queue)
     , power_(power)
     , sleep_(sleep)
@@ -106,7 +106,7 @@ esp_err_t WaterTankApp::init(bool is_logging)
     // 8. Connect WiFi & Remote UDP Logging if requested
     if (is_logging) {
         if (connect_wifi_with_retry() == ESP_OK) {
-            comm_.set_channel_policy(espnow::ChannelPolicy::FIXED); // Can be used even before comm init()
+            espnow_.set_channel_policy(espnow::ChannelPolicy::FIXED); // Can be used even before comm init()
             udp_logger::init("192.168.1.23", 4444);
             rtos_.task_delay(pdMS_TO_TICKS(5000));
         }
@@ -226,11 +226,16 @@ bool WaterTankApp::run(bool enter_sleep)
     // 5. Transmit report to Hub (enqueues packet to TX task)
     esp_err_t send_err = send_report();
 
-    // 6. Listen for incoming messages (gives time for background TX & ACK processing)
+    // 6. Update time
+    if (!time_manager_.is_synchronized()) {
+        request_time_sync();
+    }
+
+    // 7. Listen for incoming messages (gives time for background TX & ACK processing)
     uint64_t override_sleep_us = listen_for_messages(LISTEN_WINDOW_MS);
 
-    // 7. Check comm status (if TX failed or node entered RECOVERY_SCAN, wait for channel recovery & retry)
-    if (send_err != ESP_OK || comm_.get_node_state() == espnow::NodeState::RECOVERY_SCAN) {
+    // 8. Check comm status (if TX failed or node entered RECOVERY_SCAN, wait for channel recovery & retry)
+    if (send_err != ESP_OK || espnow_.get_node_state() == espnow::NodeState::RECOVERY_SCAN) {
         if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
             ESP_LOGI(TAG, "Channel recovered! Retrying report send...");
             send_report();
@@ -238,7 +243,7 @@ bool WaterTankApp::run(bool enter_sleep)
         }
     }
 
-    // 8. Handle OTA triggers & firmware verification
+    // 9. Handle OTA triggers & firmware verification
     if (ota_triggered_) {
         process_pending_ota();
     }
@@ -247,14 +252,14 @@ bool WaterTankApp::run(bool enter_sleep)
         check_firmware();
     }
 
-    // 9. Calculate sleep time & determine GPIO wakeup status
+    // 10. Calculate sleep time & determine GPIO wakeup status
     uint64_t sleep_time_us = (override_sleep_us > 0) ? override_sleep_us : logic_.calculate_sleep_time_us(stats_);
     stats_.gpio_wakeup_enabled = float_switch_.should_enable_wakeup();
 
-    // 10. Save updated state (Core & Tank Storage)
+    // 11. Save updated state (Core & Tank Storage)
     save_persistent_state();
 
-    // 11. Enter deep sleep (or delay if enter_sleep is false for testing)
+    // 12. Enter deep sleep (or delay if enter_sleep is false for testing)
     if (enter_sleep) {
         enter_deep_sleep(sleep_time_us);
         return false;
@@ -279,7 +284,7 @@ esp_err_t WaterTankApp::send_report()
     report.backup_mode_active = stats_.backup_mode_active;
     report.unix_time = stats_.sample_timestamp_ms;
 
-    esp_err_t err = comm_.send_data(
+    esp_err_t err = espnow_.send_data(
         espnow::ReservedIds::HUB,
         static_cast<espnow::PayloadType>(farm::PayloadType::WATER_LEVEL_REPORT),
         &report,
@@ -412,7 +417,7 @@ void WaterTankApp::save_persistent_state()
 
 bool WaterTankApp::wait_for_comm_ready(uint32_t timeout_ms)
 {
-    espnow::NodeState state = comm_.get_node_state();
+    espnow::NodeState state = espnow_.get_node_state();
 
     if (state == espnow::NodeState::RECOVERY_SCAN) {
         constexpr uint32_t POLL_DELAY_MS = 100;
@@ -420,7 +425,7 @@ bool WaterTankApp::wait_for_comm_ready(uint32_t timeout_ms)
 
         while ((sys_timer_.get_time_us() / 1000) < deadline_ms) {
             rtos_.task_delay(pdMS_TO_TICKS(POLL_DELAY_MS));
-            state = comm_.get_node_state();
+            state = espnow_.get_node_state();
 
             if (state == espnow::NodeState::OPERATIONAL) {
                 ESP_LOGI(TAG, "ESP-NOW recovered channel during wait window");
@@ -442,11 +447,11 @@ void WaterTankApp::wait_for_pairing(uint32_t timeout_ms)
     constexpr uint32_t POLL_DELAY_MS = 100;
     int64_t deadline_ms = (sys_timer_.get_time_us() / 1000) + timeout_ms;
 
-    espnow::NodeState state = comm_.get_node_state();
+    espnow::NodeState state = espnow_.get_node_state();
 
     while ((sys_timer_.get_time_us() / 1000) < deadline_ms) {
         rtos_.task_delay(pdMS_TO_TICKS(POLL_DELAY_MS));
-        state = comm_.get_node_state();
+        state = espnow_.get_node_state();
 
         if (state == espnow::NodeState::OPERATIONAL) {
             return;
@@ -533,7 +538,7 @@ void WaterTankApp::process_pending_ota()
     bool connected_by_us = false;
 
     // 1. Deinit radio users before OTA
-    comm_.deinit();
+    espnow_.deinit();
     btn_trigger_.disarm();
     espnow_trigger_.disarm();
 
@@ -653,7 +658,7 @@ esp_err_t WaterTankApp::init_espnow()
     config.heartbeat_interval_ms = 0;
 
     esp_err_t err;
-    if ((err = comm_.init(config)) != ESP_OK) {
+    if ((err = espnow_.init(config)) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize EspNowManager: %s", esp_err_to_name(err));
         return err;
     }
@@ -801,7 +806,7 @@ esp_err_t WaterTankApp::init_tank_storage()
 
 void WaterTankApp::process_node_state()
 {
-    espnow::NodeState state = comm_.get_node_state();
+    espnow::NodeState state = espnow_.get_node_state();
     if (state == espnow::NodeState::OPERATIONAL) {
         ESP_LOGI(TAG, "ESP-NOW NodeState OPERATIONAL");
         return;
@@ -809,7 +814,7 @@ void WaterTankApp::process_node_state()
 
     if (state == espnow::NodeState::PAIRING || state == espnow::NodeState::PAIRING_SCAN) {
         ESP_LOGI(TAG, "ESP-NOW NodeState PAIRING");
-        esp_err_t ret = comm_.add_peer(espnow::ReservedIds::HUB, HUB_MAC_ADRESS, espnow::ReservedTypes::HUB, 0);
+        esp_err_t ret = espnow_.add_peer(espnow::ReservedIds::HUB, HUB_MAC_ADRESS, espnow::ReservedTypes::HUB, 0);
         if (ret == ESP_OK) {
             ESP_LOGW(TAG, "HUB added as peer");
             return;
@@ -849,7 +854,7 @@ esp_err_t WaterTankApp::send_ota_report(farm::OtaExecResult result, farm::OtaErr
     }
 
     ESP_LOGI(TAG, "Sending OTA status report: result=%u, error_code=%u", result, error_code);
-    return comm_.send_data(
+    return espnow_.send_data(
         espnow::ReservedIds::HUB,
         static_cast<uint8_t>(farm::PayloadType::OTA_STATUS_REPORT),
         &report,
@@ -903,9 +908,19 @@ void WaterTankApp::report_ota_failure_and_restore_comm(farm::OtaErrorCode err_co
     }
 
     if (init_espnow() == ESP_OK) {
-        comm_.set_channel_policy(connected_by_us ? espnow::ChannelPolicy::SCAN : espnow::ChannelPolicy::FIXED);
+        espnow_.set_channel_policy(connected_by_us ? espnow::ChannelPolicy::SCAN : espnow::ChannelPolicy::FIXED);
         if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
             send_ota_report(farm::OtaExecResult::DOWNLOAD_FAILED, err_code);
         }
     }
+}
+
+esp_err_t WaterTankApp::request_time_sync()
+{
+    return espnow_.send_data(
+        espnow::ReservedIds::HUB,
+        static_cast<espnow::PayloadType>(farm::PayloadType::REQUEST_TIME_SYNC),
+        nullptr,
+        0,
+        false);
 }
