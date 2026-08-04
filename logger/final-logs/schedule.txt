@@ -28,3 +28,16 @@ Morning - Final reflective sensor installation, v4
 
 07-24
 09:19 - float switch activated automatically with the current float
+
+08-03
+New sensor with SENSOR_OFFSET_CM = 28.1, min_distance = 32.5. Before, in the validation LUT logs, the max water level was 36.4 and SENSOR_OFFSET_CM = 29.5 (real distance to max level) and min_distance 36.4.
+
+old_min_distance - old_offset = depth (distance from 0 on LUT and max water level with actual floatswitch)
+36.4 - 29.5 = 6.9
+
+new_min_distance - new_offset = depth
+new_offset = new_min_distance - depth
+new_offset = 32.5 - 6.9 
+new offset = 25.6
+
+
