@@ -525,7 +525,7 @@ bool WaterTankApp::process_command(const espnow::AppMessage& msg, uint64_t& out_
                 farm::TimeSyncCommand farm_cmd{};
                 memcpy(&farm_cmd, msg.payload, sizeof(farm_cmd));
 
-                sync_time_from_espnow(farm_cmd);
+                sync_time_from_espnow_packet(farm_cmd);
             }
         }
     }
@@ -824,7 +824,7 @@ void WaterTankApp::process_node_state()
     }
 }
 
-void WaterTankApp::sync_time_from_espnow(const farm::TimeSyncCommand& sync_cmd)
+void WaterTankApp::sync_time_from_espnow_packet(const farm::TimeSyncCommand& sync_cmd)
 {
     time_manager::TimeSyncPacket pkt{};
     pkt.timestamp_ms = sync_cmd.timestamp_ms;
