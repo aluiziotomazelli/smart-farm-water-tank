@@ -12,7 +12,7 @@
 static constexpr uint8_t TANK_HEIGHT_CM = 150; ///< Nominal total height of the tank (cm). See TankGeometry::VOLUME_LUT.
 static constexpr float SENSOR_OFFSET_CM = 25.6; ///< Offset of the sensor from the top of water max level (cm)
 
-static constexpr float SENSOR_MIN_DISTANCE_CM = 25.0f;  ///< Minimum distance for sensor valid measure (cm)
+static constexpr float SENSOR_MIN_DISTANCE_CM = 21.0f;  ///< Minimum distance for sensor valid measure (cm)
 static constexpr float SENSOR_MAX_DISTANCE_CM = 178.0f; ///< Maximum distance for sensor valid measure (cm)
 
 // =============================================================================
