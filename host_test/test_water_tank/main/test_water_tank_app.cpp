@@ -115,8 +115,9 @@ protected:
         }));
 
         ON_CALL(mock_ota, init(_)).WillByDefault(Return(true));
-        ON_CALL(mock_wifi, init()).WillByDefault(Return(ESP_OK));
+        ON_CALL(mock_wifi, init(_)).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_time_manager, init(_)).WillByDefault(Return(ESP_OK));
+        ON_CALL(Const(mock_time_manager), is_synchronized()).WillByDefault(Return(true));
         ON_CALL(mock_wifi, add_credentials(_, _)).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_wifi, start()).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_comm, init(_)).WillByDefault(Return(ESP_OK));
@@ -173,7 +174,7 @@ TEST_F(WaterTankAppTest, Init_Success_ConfiguresDependencies)
     EXPECT_CALL(mock_ota, init(_)).Times(1);
 
     // Wifi manager is initialized but not connected since is_logging=false
-    EXPECT_CALL(mock_wifi, init()).Times(1);
+    EXPECT_CALL(mock_wifi, init(_)).Times(1);
 
     esp_err_t ret = sut->init(false);
 
@@ -187,7 +188,7 @@ TEST_F(WaterTankAppTest, Init_Success_ConfiguresDependencies)
 TEST_F(WaterTankAppTest, Init_OtaManagerFail_ReturnsErrorImmediately)
 {
     EXPECT_CALL(mock_ota, init(_)).WillOnce(Return(false));
-    EXPECT_CALL(mock_wifi, init()).Times(0);
+    EXPECT_CALL(mock_wifi, init(_)).Times(0);
 
     esp_err_t ret = sut->init(false);
 
@@ -452,8 +453,8 @@ TEST_F(WaterTankAppTest, Run_WhenRecoveryScan_WaitsCommReadyAndRetriesReportSend
 {
     sut->init(false);
 
-    // Expect 2 report transmissions (initial attempt + retry after channel recovery)
-    EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).Times(2).WillRepeatedly(Return(ESP_OK));
+    // Expect 2 report transmissions (initial failed attempt + retry after channel recovery)
+    EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).WillOnce(Return(ESP_FAIL)).WillOnce(Return(ESP_OK));
 
     InSequence seq;
     // Checked at line 229 of run()
@@ -491,7 +492,7 @@ TEST_F(WaterTankAppTest, Run_RollsBackFirmware_WhenSessionNotHealthy)
     // Make session unhealthy by failing WiFi initialization (or another component after wifi is connected/started)
     // To test disconnect_stop_wifi, wifi get_state must be != UNINITIALIZED and != INITIALIZED
     EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::CONNECTED_GOT_IP));
-    EXPECT_CALL(mock_wifi, init()).WillOnce(Return(ESP_FAIL));
+    EXPECT_CALL(mock_wifi, init(_)).WillOnce(Return(ESP_FAIL));
 
     // Check firmware will call wait_for_comm_ready -> comm_.get_node_state()
     EXPECT_CALL(mock_comm, get_node_state()).WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));

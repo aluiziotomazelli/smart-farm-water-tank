@@ -224,24 +224,26 @@ bool WaterTankApp::run(bool enter_sleep)
         stats_.sample_timestamp_ms);
 
     // 5. Transmit report to Hub (enqueues packet to TX task)
-    esp_err_t send_err = send_report();
+    farm::WaterLevelReport report = create_report();
+    esp_err_t send_err;
+    send_err = send_report(report);
 
-    // 6. Update time
+    // 6. Check send status & wait for channel recovery & retry
+    if (send_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to send report: %s", esp_err_to_name(send_err));
+        if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
+            ESP_LOGI(TAG, "Channel recovered! Retrying report send...");
+            send_report(report);
+        }
+    }
+
+    // 7. Update time
     if (!time_manager_.is_synchronized()) {
         request_time_sync();
     }
 
-    // 7. Listen for incoming messages (gives time for background TX & ACK processing)
+    // 8. Listen for incoming messages
     uint64_t override_sleep_us = listen_for_messages(LISTEN_WINDOW_MS);
-
-    // 8. Check comm status (if TX failed or node entered RECOVERY_SCAN, wait for channel recovery & retry)
-    if (send_err != ESP_OK || espnow_.get_node_state() == espnow::NodeState::RECOVERY_SCAN) {
-        if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
-            ESP_LOGI(TAG, "Channel recovered! Retrying report send...");
-            send_report();
-            rtos_.task_delay(pdMS_TO_TICKS(50));
-        }
-    }
 
     // 9. Handle OTA triggers & firmware verification
     if (ota_triggered_) {
@@ -271,7 +273,7 @@ bool WaterTankApp::run(bool enter_sleep)
 // PRIVATE METHODS
 // =====================================================================
 
-esp_err_t WaterTankApp::send_report()
+farm::WaterLevelReport WaterTankApp::create_report() const
 {
     farm::WaterLevelReport report = {};
 
@@ -281,21 +283,22 @@ esp_err_t WaterTankApp::send_report()
     report.battery_percent = stats_.last_battery_percent;
     report.battery_state = stats_.last_battery_state;
     report.status = map_status(stats_.last_result);
+    report.float_switch_is_full = floatswitch_tank_full_;
     report.backup_mode_active = stats_.backup_mode_active;
     report.unix_time = stats_.sample_timestamp_ms;
 
-    esp_err_t err = espnow_.send_data(
+    return report;
+}
+
+esp_err_t WaterTankApp::send_report(const farm::WaterLevelReport& report)
+{
+    return espnow_.send_data(
         espnow::ReservedIds::HUB,
         static_cast<espnow::PayloadType>(farm::PayloadType::WATER_LEVEL_REPORT),
         &report,
         sizeof(report),
         true // require_ack
     );
-
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to send report: %s", esp_err_to_name(err));
-    }
-    return err;
 }
 
 void WaterTankApp::retry_reading_if_needed(ultrasonic::Reading& reading)
@@ -318,7 +321,7 @@ void WaterTankApp::retry_reading_if_needed(ultrasonic::Reading& reading)
     }
 }
 
-farm::SensorStatus WaterTankApp::map_status(ultrasonic::UsResult result)
+farm::SensorStatus WaterTankApp::map_status(ultrasonic::UsResult result) const
 {
     switch (result) {
     case ultrasonic::UsResult::OK:
@@ -481,9 +484,7 @@ uint64_t WaterTankApp::listen_for_messages(uint32_t timeout_ms)
 
         if (rtos_.queue_receive(rx_queue_, &msg, pdMS_TO_TICKS(remaining)) == pdPASS) {
             if (msg.msg_type == espnow::MessageType::COMMAND) {
-                if (process_command(msg, override_sleep_us)) {
-                    break;
-                }
+                process_command(msg, override_sleep_us);
             }
         }
     }
@@ -491,7 +492,7 @@ uint64_t WaterTankApp::listen_for_messages(uint32_t timeout_ms)
     return override_sleep_us;
 }
 
-bool WaterTankApp::process_command(const espnow::AppMessage& msg, uint64_t& out_override_sleep_us)
+void WaterTankApp::process_command(const espnow::AppMessage& msg, uint64_t& out_override_sleep_us)
 {
     const auto payload_type = msg.payload_type;
 
@@ -517,7 +518,6 @@ bool WaterTankApp::process_command(const espnow::AppMessage& msg, uint64_t& out_
                 memcpy(&sleep_cmd, msg.payload, sizeof(sleep_cmd));
                 out_override_sleep_us = static_cast<uint64_t>(sleep_cmd.sleep_time_s) * 1000000ULL;
                 ESP_LOGI(TAG, "Received SLEEP_OVERRIDE: %lu s", static_cast<unsigned long>(sleep_cmd.sleep_time_s));
-                return true;
             }
         }
         else if (cmd == farm::CommandType::SYNC_TIME) {
@@ -529,7 +529,6 @@ bool WaterTankApp::process_command(const espnow::AppMessage& msg, uint64_t& out_
             }
         }
     }
-    return false;
 }
 
 void WaterTankApp::process_pending_ota()
