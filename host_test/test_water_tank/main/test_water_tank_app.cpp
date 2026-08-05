@@ -822,3 +822,107 @@ TEST_F(WaterTankAppTest, Run_ProcessesSyncTimeCommand_PopulatesCore)
     EXPECT_TRUE(sut_with_queue->get_core_data().has_valid_time);
     EXPECT_EQ(sync_cmd.timestamp_ms, sut_with_queue->get_core_data().last_sync_unix_time_ms);
 }
+
+TEST_F(WaterTankAppTest, Run_UnsynchronizedTime_RequestsTimeSyncFromHub)
+{
+    EXPECT_CALL(Const(mock_time_manager), is_synchronized()).WillRepeatedly(Return(false));
+
+    bool time_sync_requested = false;
+    EXPECT_CALL(mock_comm, send_data(_, _, _, _, _))
+        .WillRepeatedly(Invoke([&time_sync_requested](uint8_t dest, uint8_t type, const void* data, size_t len, bool ack) {
+            if (type == static_cast<uint8_t>(farm::PayloadType::REQUEST_TIME_SYNC)) {
+                time_sync_requested = true;
+                EXPECT_EQ(dest, static_cast<uint8_t>(espnow::ReservedIds::HUB));
+                EXPECT_FALSE(ack);
+            }
+            return ESP_OK;
+        }));
+
+    sut->run(true);
+
+    EXPECT_TRUE(time_sync_requested);
+}
+
+TEST_F(WaterTankAppTest, Run_ProcessesMultipleCommandsInListenWindow)
+{
+    QueueHandle_t fake_queue = reinterpret_cast<QueueHandle_t>(0x1234);
+    auto sut_with_queue = create_app_with_queue(fake_queue);
+
+    farm::TimeSyncCommand sync_cmd{};
+    sync_cmd.timestamp_ms = 1710000000000ULL;
+    sync_cmd.tz_offset_min = -180;
+
+    espnow::AppMessage sync_msg{};
+    sync_msg.msg_type = espnow::MessageType::COMMAND;
+    sync_msg.payload_type = static_cast<uint8_t>(farm::CommandType::SYNC_TIME);
+    sync_msg.payload_len = sizeof(sync_cmd);
+    memcpy(sync_msg.payload, &sync_cmd, sizeof(sync_cmd));
+
+    farm::SleepOverrideCommand override_cmd{.sleep_time_s = 300};
+    espnow::AppMessage sleep_msg{};
+    sleep_msg.msg_type = espnow::MessageType::COMMAND;
+    sleep_msg.payload_type = static_cast<uint8_t>(farm::CommandType::SLEEP_OVERRIDE);
+    sleep_msg.payload_len = sizeof(override_cmd);
+    memcpy(sleep_msg.payload, &override_cmd, sizeof(override_cmd));
+
+    size_t call_count = 0;
+    EXPECT_CALL(mock_rtos, queue_receive(fake_queue, _, _))
+        .WillRepeatedly(Invoke([sync_msg, sleep_msg, &call_count](QueueHandle_t, void* data, TickType_t) {
+            call_count++;
+            if (call_count == 1) {
+                if (data) *static_cast<espnow::AppMessage*>(data) = sync_msg;
+                return pdPASS;
+            }
+            if (call_count == 2) {
+                if (data) *static_cast<espnow::AppMessage*>(data) = sleep_msg;
+                return pdPASS;
+            }
+            return pdFAIL;
+        }));
+
+    EXPECT_CALL(mock_time_manager, sync_from_time_packet(_))
+        .WillOnce(Invoke([](const time_manager::TimeSyncPacket& pkt) {
+            EXPECT_EQ(pkt.timestamp_ms, 1710000000000ULL);
+            return ESP_OK;
+        }));
+
+    EXPECT_CALL(mock_sleep, enable_timer_wakeup(300000000ULL)).WillOnce(Return(ESP_OK));
+
+    sut_with_queue->run(true);
+
+    EXPECT_TRUE(sut_with_queue->get_core_data().has_valid_time);
+}
+
+TEST_F(WaterTankAppTest, Run_PairingNodeState_AddsHubPeer)
+{
+    EXPECT_CALL(mock_comm, get_node_state())
+        .WillOnce(Return(espnow::NodeState::PAIRING))
+        .WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
+
+    EXPECT_CALL(mock_comm, add_peer(espnow::ReservedIds::HUB, _, espnow::ReservedTypes::HUB, 0))
+        .WillOnce(Return(ESP_OK));
+
+    sut->run(true);
+}
+
+TEST_F(WaterTankAppTest, Run_HighVarianceSensorResult_RetriesWith1_8xSamples)
+{
+    ultrasonic::Reading high_var_reading;
+    high_var_reading.result = ultrasonic::UsResult::HIGH_VARIANCE;
+    high_var_reading.cm = 0.0f;
+
+    ultrasonic::Reading ok_reading;
+    ok_reading.result = ultrasonic::UsResult::OK;
+    ok_reading.cm = 75.0f;
+
+    InSequence seq;
+    // Initial read (default 11 samples)
+    EXPECT_CALL(mock_sensor, read_level(11)).WillOnce(Return(high_var_reading));
+    // Retry with 1.8x sample count (19 samples: 11 * 1.8 = 19)
+    EXPECT_CALL(mock_sensor, read_level(19)).WillOnce(Return(ok_reading));
+
+    sut->run(true);
+
+    EXPECT_GT(sut->get_stats().level_permille, 0);
+}
+
