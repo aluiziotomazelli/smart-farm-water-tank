@@ -2,6 +2,24 @@
 
 ---
 
+## Quick Start: How to Build for Production & Development
+
+### 1. Build for Development / Testing (Default Profile)
+Running standard `idf.py build` automatically uses `sdkconfig.defaults.dev` (with `INFO` logs, `-Og` debug optimization, and console output enabled):
+```bash
+source $HOME/dev/esp/esp-idf/export.sh
+idf.py build
+```
+
+### 2. Build for Production (Field Release)
+To build an optimized production binary (silenced `WARN` logs, `-Os` size optimization, silent assertions, no console output):
+```bash
+source $HOME/dev/esp/esp-idf/export.sh
+idf.py -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.esp32c3;sdkconfig.defaults.prod" reconfigure build
+```
+
+---
+
 ## 1. Executive Summary
 
 The **Smart Farm Water Tank** firmware operates on battery power using a *run-to-completion* design pattern paired with *Deep Sleep*.
