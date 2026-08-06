@@ -42,6 +42,19 @@ idf.py build
 ./build/test_water_tank.elf
 ```
 
+## Deploying OTA Firmware
+
+To deploy compiled firmware binaries to the local OTA server (`ota-server.local`):
+
+1. Export ESP-IDF environment variables (the deploy script uses ESP-IDF tooling):
+   ```bash
+   source $HOME/dev/esp/esp-idf/export.sh
+   ```
+2. Execute `manage.py` from `~/dev/ota_server`:
+   ```bash
+   python3 ~/dev/ota_server/manage.py deploy ~/dev/workspaces/smart-farm/smart-farm-water-tank/build/water_tank.bin --host ota-server.local
+   ```
+
 ## System & Configuration Notes
 
 ### Main Task Stack Size
