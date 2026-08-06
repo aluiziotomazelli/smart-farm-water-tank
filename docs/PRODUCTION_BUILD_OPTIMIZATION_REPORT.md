@@ -17,6 +17,10 @@ To build an optimized production binary (silenced `WARN` logs, `-Os` size optimi
 source $HOME/dev/esp/esp-idf/export.sh
 idf.py -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.esp32c3;sdkconfig.defaults.prod" reconfigure build
 ```
+Tip: You may need to clean your build directory, sdconfig and dependencies.lock 
+```bash
+rm -rf build sdkconfig dependencies.lock
+```
 
 ---
 
