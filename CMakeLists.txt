@@ -3,6 +3,11 @@ cmake_minimum_required(VERSION 3.16)
 # Define the project name
 set(PROJECT_NAME "water_tank")
 
+# Set default sdkconfig profiles for development if not explicitly passed
+if(NOT DEFINED SDKCONFIG_DEFAULTS)
+    set(SDKCONFIG_DEFAULTS "sdkconfig.defaults;sdkconfig.defaults.esp32c3;sdkconfig.defaults.dev")
+endif()
+
 # Add paths for components (submodules and shared components)
 list(APPEND EXTRA_COMPONENT_DIRS
     "${CMAKE_CURRENT_LIST_DIR}/components/smart-farm-common"
