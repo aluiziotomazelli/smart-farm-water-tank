@@ -113,6 +113,7 @@ protected:
     void save_persistent_state();
     esp_err_t disconnect_stop_wifi();
     void process_command(const espnow::AppMessage& msg, uint64_t& out_override_sleep_us);
+    void send_cmd_ack(const espnow::AppMessage& msg, espnow::AckStatus status);
     esp_err_t send_ota_report(farm::OtaExecResult result, farm::OtaErrorCode error_code = farm::OtaErrorCode::NONE);
     farm::OtaErrorCode map_ota_fail_reason(OtaFailReason reason) const;
     void report_ota_failure_and_restore_comm(farm::OtaErrorCode err_code, bool connected_by_us);

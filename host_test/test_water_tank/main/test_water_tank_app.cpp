@@ -517,7 +517,7 @@ TEST_F(WaterTankAppTest, OnOtaTriggered_EntersWifiListeningMode)
     sut->init(false);
     sut->on_ota_triggered(OtaTriggerSource::ESPNOW);
 
-    EXPECT_CALL(mock_comm, deinit()).Times(1);
+    EXPECT_CALL(mock_comm, deinit()).Times(2);
     EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::CONNECTED_GOT_IP));
     EXPECT_CALL(mock_ota, start_ota()).Times(1);
     EXPECT_CALL(mock_ota, get_status()).WillRepeatedly(Return(OtaStatus::READY_TO_RESTART));
@@ -610,7 +610,7 @@ TEST_F(WaterTankAppTest, Run_ProcessesStartOtaCommand)
             return pdPASS;
         }));
 
-    EXPECT_CALL(mock_comm, deinit()).Times(1);
+    EXPECT_CALL(mock_comm, deinit()).Times(2);
     EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::CONNECTED_GOT_IP));
     EXPECT_CALL(mock_ota, start_ota()).Times(1);
     EXPECT_CALL(mock_ota, get_status()).WillRepeatedly(Return(OtaStatus::READY_TO_RESTART));
@@ -663,6 +663,36 @@ TEST_F(WaterTankAppTest, Run_ProcessesSleepOverrideCommand)
     sut_with_queue->run(true);
 }
 
+TEST_F(WaterTankAppTest, Run_ProcessesCommandsWithAckRequired_SendsConfirmReception)
+{
+    QueueHandle_t fake_queue = reinterpret_cast<QueueHandle_t>(0x1234);
+    auto sut_with_queue = create_app_with_queue(fake_queue);
+
+    farm::SleepOverrideCommand override_cmd{.sleep_time_s = 60};
+    espnow::AppMessage msg{};
+    msg.sender_id = static_cast<espnow::NodeId>(farm::NodeId::HUB);
+    msg.sequence_number = 42;
+    msg.requires_ack = true;
+    msg.msg_type = espnow::MessageType::COMMAND;
+    msg.payload_type = static_cast<uint8_t>(farm::CommandType::SLEEP_OVERRIDE);
+    msg.payload_len = sizeof(override_cmd);
+    memcpy(msg.payload, &override_cmd, sizeof(override_cmd));
+
+    EXPECT_CALL(mock_rtos, queue_receive(fake_queue, _, _))
+        .WillOnce(Invoke([msg](QueueHandle_t, void* data, TickType_t) {
+            if (data)
+                *static_cast<espnow::AppMessage*>(data) = msg;
+            return pdPASS;
+        }));
+
+    EXPECT_CALL(mock_comm, confirm_reception(msg.sender_id, 42, espnow::AckStatus::OK))
+        .WillOnce(Return(ESP_OK));
+
+    EXPECT_CALL(mock_sleep, enable_timer_wakeup(60000000ULL)).WillOnce(Return(ESP_OK));
+
+    sut_with_queue->run(true);
+}
+
 TEST_F(WaterTankAppTest, Run_PeriodicNvsCommit_ForcesCommitWhenIntervalReached)
 {
     EXPECT_CALL(mock_tank_storage, load_app_data(_)).WillOnce(Invoke([](WaterTankStats& stats) {
@@ -685,7 +715,7 @@ TEST_F(WaterTankAppTest, Run_CancelsOta_WhenOtaFails)
     sut->init(false);
     sut->on_ota_triggered(OtaTriggerSource::ESPNOW);
 
-    EXPECT_CALL(mock_comm, deinit()).Times(1);
+    EXPECT_CALL(mock_comm, deinit()).Times(2);
     EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::CONNECTED_GOT_IP));
     EXPECT_CALL(mock_ota, start_ota()).Times(1);
 

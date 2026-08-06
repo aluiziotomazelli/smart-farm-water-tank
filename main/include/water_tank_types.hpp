@@ -27,6 +27,7 @@ static constexpr uint16_t BATTERY_CRITICAL_MV = 3200; ///< Voltage representing 
 // Water Tank Logic & Timer Settings
 // =============================================================================
 static constexpr uint16_t LEVEL_DELTA_MIN = 5; ///< Minimum level change to detect (5 permille)
+static constexpr uint8_t FILL_STATE_CONFIRMATIONS_REQUIRED = 2; ///< Consecutive samples needed to confirm FillState transition
 
 static constexpr uint64_t TIMER_FILLING_US = 60ULL * 1000000ULL;       ///< Time to sleep when tank is filling (60 s)
 static constexpr uint64_t TIMER_STABLE_US = 5ULL * 60ULL * 1000000ULL; ///< Time to sleep when tank is stable (5 min)

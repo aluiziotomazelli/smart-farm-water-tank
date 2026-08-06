@@ -1,6 +1,8 @@
 #include "water_tank_logic.hpp"
 #include "esp_log.h"
 
+static const char* TAG = "WaterTankLogic";
+
 WaterTankLogic::WaterTankLogic(const TankGeometry& geometry, floatswitch::IFloatSwitch& float_switch)
     : geometry_(geometry)
     , float_switch_(float_switch)
@@ -90,20 +92,50 @@ void WaterTankLogic::update_fill_state(uint16_t current_permille, WaterTankStats
 {
     if (stats.last_level_permille == 0) {
         stats.fill_state = FillState::STABLE;
+        stats.pending_fill_state = FillState::UNKNOWN;
+        stats.pending_state_count = 0;
         return;
     }
 
     int32_t delta = static_cast<int32_t>(current_permille) - static_cast<int32_t>(stats.last_level_permille);
     uint32_t abs_delta = (delta < 0) ? -delta : delta;
 
+    FillState raw_direction;
     if (abs_delta < LEVEL_DELTA_MIN) {
-        stats.fill_state = FillState::STABLE;
+        raw_direction = FillState::STABLE;
     }
     else if (delta > 0) {
-        stats.fill_state = FillState::FILLING;
+        raw_direction = FillState::FILLING;
     }
     else {
-        stats.fill_state = FillState::DRAINING;
+        raw_direction = FillState::DRAINING;
+    }
+
+    if (stats.fill_state == FillState::UNKNOWN) {
+        stats.fill_state = raw_direction;
+        stats.pending_fill_state = FillState::UNKNOWN;
+        stats.pending_state_count = 0;
+        return;
+    }
+
+    if (raw_direction == stats.fill_state) {
+        stats.pending_fill_state = FillState::UNKNOWN;
+        stats.pending_state_count = 0;
+        return;
+    }
+
+    if (raw_direction == stats.pending_fill_state) {
+        stats.pending_state_count++;
+        if (stats.pending_state_count >= FILL_STATE_CONFIRMATIONS_REQUIRED) {
+            stats.fill_state = raw_direction;
+            stats.pending_fill_state = FillState::UNKNOWN;
+            stats.pending_state_count = 0;
+            ESP_LOGI(TAG, "FillState transitioned to %d after confirmation", static_cast<int>(raw_direction));
+        }
+    }
+    else {
+        stats.pending_fill_state = raw_direction;
+        stats.pending_state_count = 1;
     }
 }
 

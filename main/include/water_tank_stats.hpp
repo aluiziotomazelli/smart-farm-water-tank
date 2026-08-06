@@ -14,7 +14,7 @@
 struct WaterTankStats
 {
     static constexpr uint32_t MAGIC = 0x544B; ///< For CRC validation | 0x544B = "TK"
-    static constexpr uint8_t VERSION = 1;
+    static constexpr uint8_t VERSION = 2;
 
     // Magic first (validation)
     uint16_t magic = MAGIC;
@@ -24,6 +24,8 @@ struct WaterTankStats
     uint16_t level_permille = 0;
     uint16_t last_level_permille = 0;
     FillState fill_state = FillState::UNKNOWN;
+    FillState pending_fill_state = FillState::UNKNOWN;
+    uint8_t pending_state_count = 0;
     // It is no longer used for fill state logic (replaced by last_level_permille).
     float last_distance_cm = 0.0f;
     ultrasonic::UsResult last_result = ultrasonic::UsResult::HW_FAULT;
@@ -76,6 +78,7 @@ struct WaterTankStats
     {
         return magic == other.magic && version == other.version && level_permille == other.level_permille &&
                last_level_permille == other.last_level_permille && fill_state == other.fill_state &&
+               pending_fill_state == other.pending_fill_state && pending_state_count == other.pending_state_count &&
                last_distance_cm == other.last_distance_cm && last_result == other.last_result &&
                sample_timestamp_ms == other.sample_timestamp_ms && measure_count == other.measure_count &&
                ok_count == other.ok_count && weak_count == other.weak_count && timeout_count == other.timeout_count &&

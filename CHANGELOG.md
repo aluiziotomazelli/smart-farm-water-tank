@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-08-06
+
+### Added
+- Multi-sample confirmation window (`FILL_STATE_CONFIRMATIONS_REQUIRED = 2`) for `FillState` transitions to filter out single-sample water turbulence noise.
+- Persistent candidate state fields (`pending_fill_state`, `pending_state_count`) in `WaterTankStats` (version 2) stored in RTC RAM.
+- Graceful peripheral deactivation (`espnow_.deinit()`) before deep sleep and MCU system restarts (`REBOOT` command).
+- ACK confirmation helper `send_cmd_ack()` with 100ms task delay before reboot commands.
+
+### Changed
+- Refactored `WaterTankApp::process_command()` into clean command `switch` statements.
+- Separated `WaterTankApp::run()` logging into modular step-by-step logs (`Aux sensors`, `Ultrasonic reading`, `Tank state`).
+- Removed duplicate component error logging in `WaterTankApp::run()`.
+
 ## [0.2.0] - 2026-07-12
 
 ### Added

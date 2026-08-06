@@ -31,12 +31,16 @@ TEST_F(WaterTankLogicTest, ProcessOkReadingUpdatesStats)
 
 TEST_F(WaterTankLogicTest, DetectsFillingState)
 {
-    // First reading
+    // First reading (anchors baseline level_permille = 100cm distance)
     logic.process_reading({ultrasonic::UsResult::OK, 100.0f}, stats);
     uint16_t first_level = stats.level_permille;
 
-    // Second reading: closer (fuller)
-    logic.process_reading({ultrasonic::UsResult::OK, 50.0f}, stats);
+    // Second reading: 70cm distance (fuller) -> raw direction FILLING, pending count = 1
+    logic.process_reading({ultrasonic::UsResult::OK, 70.0f}, stats);
+    EXPECT_EQ(stats.fill_state, FillState::STABLE); // Not confirmed yet
+
+    // Third reading: 40cm distance (even fuller) -> raw direction FILLING, pending count = 2 -> TRANSITION!
+    logic.process_reading({ultrasonic::UsResult::OK, 40.0f}, stats);
 
     EXPECT_GT(stats.level_permille, first_level);
     EXPECT_EQ(stats.fill_state, FillState::FILLING);
@@ -44,15 +48,38 @@ TEST_F(WaterTankLogicTest, DetectsFillingState)
 
 TEST_F(WaterTankLogicTest, DetectsDrainingState)
 {
-    // First reading
-    logic.process_reading({ultrasonic::UsResult::OK, 50.0f}, stats);
+    // First reading (anchors baseline level_permille = 40cm distance)
+    logic.process_reading({ultrasonic::UsResult::OK, 40.0f}, stats);
     uint16_t first_level = stats.level_permille;
 
-    // Second reading: further (emptier)
+    // Second reading: 70cm distance (emptier) -> raw direction DRAINING, pending count = 1
+    logic.process_reading({ultrasonic::UsResult::OK, 70.0f}, stats);
+    EXPECT_EQ(stats.fill_state, FillState::STABLE); // Not confirmed yet
+
+    // Third reading: 100cm distance (even emptier) -> raw direction DRAINING, pending count = 2 -> TRANSITION!
     logic.process_reading({ultrasonic::UsResult::OK, 100.0f}, stats);
 
     EXPECT_LT(stats.level_permille, first_level);
     EXPECT_EQ(stats.fill_state, FillState::DRAINING);
+}
+
+TEST_F(WaterTankLogicTest, RejectsSingleSampleNoiseInFillingState)
+{
+    // Baseline
+    logic.process_reading({ultrasonic::UsResult::OK, 100.0f}, stats);
+    // Transition to FILLING with 2 consecutive filling samples
+    logic.process_reading({ultrasonic::UsResult::OK, 80.0f}, stats);
+    logic.process_reading({ultrasonic::UsResult::OK, 60.0f}, stats);
+    ASSERT_EQ(stats.fill_state, FillState::FILLING);
+
+    // Single noisy sample (reading drops slightly due to wave turbulence -> raw STABLE)
+    logic.process_reading({ultrasonic::UsResult::OK, 60.0f}, stats);
+    EXPECT_EQ(stats.fill_state, FillState::FILLING); // State remains FILLING!
+
+    // Next sample continues filling -> pending noise is discarded, state remains FILLING
+    logic.process_reading({ultrasonic::UsResult::OK, 40.0f}, stats);
+    EXPECT_EQ(stats.fill_state, FillState::FILLING);
+    EXPECT_EQ(stats.pending_state_count, 0);
 }
 
 TEST_F(WaterTankLogicTest, EntersBackupModeOnConsecutiveFailures)

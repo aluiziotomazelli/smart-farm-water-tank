@@ -186,6 +186,8 @@ bool WaterTankApp::run(bool enter_sleep)
             battery_monitor_.deinit();
         }
     }
+    ESP_LOGI(TAG, "Aux sensors: Battery %u mV (%u%%), Float switch full: %d",
+             stats_.last_battery_mv, stats_.last_battery_percent, floatswitch_tank_full_);
 
     // 3. Perform ultrasonic reading (wait remaining warmup if needed)
     ultrasonic::Reading reading;
@@ -198,13 +200,11 @@ bool WaterTankApp::run(bool enter_sleep)
         reading = sensor_.read_level(DEFAULT_SAMPLE_COUNT);
         retry_reading_if_needed(reading);
         power_.turn_off();
+        ESP_LOGI(TAG, "Ultrasonic reading: %.1f cm (Result: %d)", reading.cm, static_cast<int>(reading.result));
     }
-    else { // if sensor was not powered on
-        ESP_LOGE(TAG, "Failed to power on sensor: %s", esp_err_to_name(pwr_err));
-
+    else {
         reading.result = ultrasonic::UsResult::HW_FAULT;
         reading.cm = 0;
-
         session_healthy_ = false;
     }
 
@@ -212,25 +212,15 @@ bool WaterTankApp::run(bool enter_sleep)
     stats_.sample_timestamp_ms = time_manager_.is_synchronized() ? time_manager_.get_timestamp_ms() : 0;
     logic_.process_reading(reading, stats_);
     logic_.update_operation_mode(stats_);
-
-    ESP_LOGI(
-        TAG,
-        "Distance: %.1f - UsResult %d - Permile: %d | Battery: %d | FillState: %d | Time: %lld",
-        reading.cm,
-        static_cast<int>(reading.result),
-        stats_.level_permille,
-        stats_.last_battery_mv,
-        static_cast<int>(stats_.fill_state),
-        stats_.sample_timestamp_ms);
+    ESP_LOGI(TAG, "Tank state: Level %u ‰ | FillState: %d | BackupMode: %d",
+             stats_.level_permille, static_cast<int>(stats_.fill_state), stats_.backup_mode_active);
 
     // 5. Transmit report to Hub (enqueues packet to TX task)
     farm::WaterLevelReport report = create_report();
-    esp_err_t send_err;
-    send_err = send_report(report);
+    esp_err_t send_err = send_report(report);
 
     // 6. Check send status & wait for channel recovery & retry
     if (send_err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to send report: %s", esp_err_to_name(send_err));
         if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
             ESP_LOGI(TAG, "Channel recovered! Retrying report send...");
             send_report(report);
@@ -351,6 +341,7 @@ void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
     btn_trigger_.disarm();
     espnow_trigger_.disarm();
 
+    espnow_.deinit();
     disconnect_stop_wifi();
 
     sleep_.disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
@@ -492,41 +483,71 @@ uint64_t WaterTankApp::listen_for_messages(uint32_t timeout_ms)
     return override_sleep_us;
 }
 
+void WaterTankApp::send_cmd_ack(const espnow::AppMessage& msg, espnow::AckStatus status)
+{
+    if (msg.requires_ack) {
+        espnow_.confirm_reception(msg.sender_id, msg.sequence_number, status);
+    }
+}
+
 void WaterTankApp::process_command(const espnow::AppMessage& msg, uint64_t& out_override_sleep_us)
 {
-    const auto payload_type = msg.payload_type;
-
     // Generic transport commands (0x01–0x3F)
-    if (payload_type <= 0x3F) {
-        auto cmd = static_cast<espnow::CommandType>(payload_type);
-        if (cmd == espnow::CommandType::START_OTA) {
+    if (msg.payload_type <= 0x3F) {
+        switch (static_cast<espnow::CommandType>(msg.payload_type)) {
+        case espnow::CommandType::START_OTA:
             ESP_LOGW(TAG, "Received START_OTA command from Hub - triggering OTA");
             static_cast<EspNowOtaTrigger&>(espnow_trigger_).notify();
-        }
-        else if (cmd == espnow::CommandType::REBOOT) {
+            send_cmd_ack(msg, espnow::AckStatus::OK);
+            break;
+
+        case espnow::CommandType::REBOOT:
             ESP_LOGW(TAG, "Received REBOOT command from Hub");
+            send_cmd_ack(msg, espnow::AckStatus::OK);
+            if (msg.requires_ack) {
+                rtos_.task_delay(pdMS_TO_TICKS(100)); // Allow TX task time to transmit ACK over the air
+            }
+            espnow_.deinit();
             disconnect_stop_wifi();
             system_hal_.restart();
+            break;
+
+        default:
+            send_cmd_ack(msg, espnow::AckStatus::ERROR_PROCESSING);
+            break;
         }
     }
     // Farm application commands (0x40–0xFF)
     else {
-        auto cmd = static_cast<farm::CommandType>(payload_type);
-        if (cmd == farm::CommandType::SLEEP_OVERRIDE) {
+        switch (static_cast<farm::CommandType>(msg.payload_type)) {
+        case farm::CommandType::SLEEP_OVERRIDE:
             if (msg.payload_len >= sizeof(farm::SleepOverrideCommand)) {
                 farm::SleepOverrideCommand sleep_cmd{};
                 memcpy(&sleep_cmd, msg.payload, sizeof(sleep_cmd));
                 out_override_sleep_us = static_cast<uint64_t>(sleep_cmd.sleep_time_s) * 1000000ULL;
                 ESP_LOGI(TAG, "Received SLEEP_OVERRIDE: %lu s", static_cast<unsigned long>(sleep_cmd.sleep_time_s));
+                send_cmd_ack(msg, espnow::AckStatus::OK);
             }
-        }
-        else if (cmd == farm::CommandType::SYNC_TIME) {
+            else {
+                send_cmd_ack(msg, espnow::AckStatus::ERROR_INVALID_DATA);
+            }
+            break;
+
+        case farm::CommandType::SYNC_TIME:
             if (msg.payload_len >= sizeof(farm::TimeSyncCommand)) {
                 farm::TimeSyncCommand farm_cmd{};
                 memcpy(&farm_cmd, msg.payload, sizeof(farm_cmd));
-
                 sync_time_from_espnow_packet(farm_cmd);
+                send_cmd_ack(msg, espnow::AckStatus::OK);
             }
+            else {
+                send_cmd_ack(msg, espnow::AckStatus::ERROR_INVALID_DATA);
+            }
+            break;
+
+        default:
+            send_cmd_ack(msg, espnow::AckStatus::ERROR_PROCESSING);
+            break;
         }
     }
 }
