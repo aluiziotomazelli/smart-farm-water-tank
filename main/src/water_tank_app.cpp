@@ -244,12 +244,7 @@ bool WaterTankApp::run(bool enter_sleep)
         ESP_LOGE(TAG, "Failed to send report: %s", esp_err_to_name(send_err));
     }
 
-    // 7. Update time if node has no unix timer yet
-    if (!time_manager_.is_synchronized()) {
-        request_time_sync();
-    }
-
-    // 8. Listen for incoming messages
+    // 7. Listen for incoming messages
     uint64_t override_sleep_us = listen_for_messages(LISTEN_WINDOW_MS);
 
     // 9. Handle OTA triggers & firmware verification
@@ -284,6 +279,7 @@ farm::WaterLevelReport WaterTankApp::create_report() const
 {
     farm::WaterLevelReport report = {};
 
+    report.power_profile = core_.power_profile;
     report.level_permille = stats_.level_permille;
     report.distance_cm = stats_.last_distance_cm;
     report.battery_mv = stats_.last_battery_mv;
@@ -801,7 +797,7 @@ esp_err_t WaterTankApp::init_core_storage()
         default_core.reset();
         default_core.node_id = farm::NodeId::WATER_TANK;
         default_core.node_type = farm::NodeType::SENSOR;
-        default_core.power_profile = PowerProfile::DEEP_SLEEP;
+        default_core.power_profile = farm::PowerProfile::DEEP_SLEEP;
 
         ret = core_storage_.create_default_storage(core_, default_core);
         if (ret != ESP_OK) {
@@ -880,6 +876,7 @@ void WaterTankApp::sync_time_from_espnow_packet(const farm::TimeSyncCommand& syn
 esp_err_t WaterTankApp::send_ota_report(farm::OtaExecResult result, farm::OtaErrorCode error_code)
 {
     farm::OtaStatusReport report = {};
+    report.power_profile = core_.power_profile;
     report.result = result;
     report.error_code = error_code;
 
@@ -950,14 +947,4 @@ void WaterTankApp::report_ota_failure_and_restore_comm(farm::OtaErrorCode err_co
             send_ota_report(farm::OtaExecResult::DOWNLOAD_FAILED, err_code);
         }
     }
-}
-
-esp_err_t WaterTankApp::request_time_sync()
-{
-    return espnow_.send_data(
-        espnow::ReservedIds::HUB,
-        static_cast<espnow::PayloadType>(farm::PayloadType::REQUEST_TIME_SYNC),
-        nullptr,
-        0,
-        false);
 }

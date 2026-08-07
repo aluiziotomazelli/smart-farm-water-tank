@@ -124,7 +124,6 @@ protected:
     esp_err_t init_ota_manager();
     esp_err_t init_core_storage();
     void sync_time_from_espnow_packet(const farm::TimeSyncCommand& cmd);
-    esp_err_t request_time_sync();
 
     esp_err_t init_tank_storage();
     void check_firmware();

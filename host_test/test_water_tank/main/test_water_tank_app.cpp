@@ -853,7 +853,7 @@ TEST_F(WaterTankAppTest, Run_ProcessesSyncTimeCommand_PopulatesCore)
     EXPECT_EQ(sync_cmd.timestamp_ms, sut_with_queue->get_core_data().last_sync_unix_time_ms);
 }
 
-TEST_F(WaterTankAppTest, Run_UnsynchronizedTime_RequestsTimeSyncFromHub)
+TEST_F(WaterTankAppTest, Run_UnsynchronizedTime_DoesNotSendActiveTimeSyncRequest)
 {
     EXPECT_CALL(Const(mock_time_manager), is_synchronized()).WillRepeatedly(Return(false));
 
@@ -862,15 +862,13 @@ TEST_F(WaterTankAppTest, Run_UnsynchronizedTime_RequestsTimeSyncFromHub)
         .WillRepeatedly(Invoke([&time_sync_requested](uint8_t dest, uint8_t type, const void* data, size_t len, bool ack) {
             if (type == static_cast<uint8_t>(farm::PayloadType::REQUEST_TIME_SYNC)) {
                 time_sync_requested = true;
-                EXPECT_EQ(dest, static_cast<uint8_t>(espnow::ReservedIds::HUB));
-                EXPECT_FALSE(ack);
             }
             return ESP_OK;
         }));
 
     sut->run(true);
 
-    EXPECT_TRUE(time_sync_requested);
+    EXPECT_FALSE(time_sync_requested);
 }
 
 TEST_F(WaterTankAppTest, Run_ProcessesMultipleCommandsInListenWindow)
