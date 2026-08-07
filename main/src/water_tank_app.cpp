@@ -186,8 +186,12 @@ bool WaterTankApp::run(bool enter_sleep)
             battery_monitor_.deinit();
         }
     }
-    ESP_LOGI(TAG, "Aux sensors: Battery %u mV (%u%%), Float switch full: %d",
-             stats_.last_battery_mv, stats_.last_battery_percent, floatswitch_tank_full_);
+    ESP_LOGI(
+        TAG,
+        "Aux sensors: Battery %u mV (%u%%), Float switch full: %d",
+        stats_.last_battery_mv,
+        stats_.last_battery_percent,
+        floatswitch_tank_full_);
 
     // 3. Perform ultrasonic reading (wait remaining warmup if needed)
     ultrasonic::Reading reading;
@@ -203,6 +207,7 @@ bool WaterTankApp::run(bool enter_sleep)
         ESP_LOGI(TAG, "Ultrasonic reading: %.1f cm (Result: %d)", reading.cm, static_cast<int>(reading.result));
     }
     else {
+        ESP_LOGE(TAG, "Failed to power on sensor: %s", esp_err_to_name(pwr_err));
         reading.result = ultrasonic::UsResult::HW_FAULT;
         reading.cm = 0;
         session_healthy_ = false;
@@ -212,22 +217,34 @@ bool WaterTankApp::run(bool enter_sleep)
     stats_.sample_timestamp_ms = time_manager_.is_synchronized() ? time_manager_.get_timestamp_ms() : 0;
     logic_.process_reading(reading, stats_);
     logic_.update_operation_mode(stats_);
-    ESP_LOGI(TAG, "Tank state: Level %u ‰ | FillState: %d | BackupMode: %d",
-             stats_.level_permille, static_cast<int>(stats_.fill_state), stats_.backup_mode_active);
+    ESP_LOGI(
+        TAG,
+        "Tank state: Level %u ‰ | FillState: %d | BackupMode: %d",
+        stats_.level_permille,
+        static_cast<int>(stats_.fill_state),
+        stats_.backup_mode_active);
 
     // 5. Transmit report to Hub (enqueues packet to TX task)
     farm::WaterLevelReport report = create_report();
     esp_err_t send_err = send_report(report);
 
     // 6. Check send status & wait for channel recovery & retry
-    if (send_err != ESP_OK) {
+    if (send_err == ESP_OK) {
+        ESP_LOGI(TAG, "Report sent to Hub");
+    }
+    else {
         if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
-            ESP_LOGI(TAG, "Channel recovered! Retrying report send...");
-            send_report(report);
+            send_err = send_report(report);
+            if (send_err == ESP_OK) {
+                ESP_LOGI(TAG, "Report sent to Hub on second attempt.");
+            }
         }
     }
+    if (send_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to send report: %s", esp_err_to_name(send_err));
+    }
 
-    // 7. Update time
+    // 7. Update time if node has no unix timer yet
     if (!time_manager_.is_synchronized()) {
         request_time_sync();
     }
