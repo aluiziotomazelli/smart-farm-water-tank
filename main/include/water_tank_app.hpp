@@ -89,7 +89,7 @@ private:
 
 protected:
     WaterTankStats stats_;
-    CoreStorage core_;
+    CoreData core_;
 
     bool session_healthy_ = true;
     bool pending_firmware_verify_ = false;

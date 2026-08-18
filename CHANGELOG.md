@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.9] - 2026-08-17
+
+### Changed
+- Refactored `WaterTankNvs` to inherit from the generic `AppStorage<WaterTankStats, Magic, Version>` CRTP base class in `smart-farm-common`, eliminating local NVS boilerplate and implementation files.
+- Decoupled domain struct `WaterTankStats` from storage metadata (`magic`, `version`, `crc`), wrapping it automatically with the new `StorageEnvelope` pattern.
+- Migrated `CoreStorage` usage in `WaterTankApp` to pure `CoreData` and separated `process_boot_reasons()` from storage initialization.
+- Simplified `init_tank_storage()` and `init_core_storage()` logic utilizing `init_app_data()` / `init()` with automatic fallback to defaults.
+- Bumped firmware version to `0.3.9`.
+
 ## [0.3.0] - 2026-08-06
 
 ### Added

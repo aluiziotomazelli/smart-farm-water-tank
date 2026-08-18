@@ -37,7 +37,7 @@ class TestableWaterTankApp : public WaterTankApp
 public:
     using WaterTankApp::WaterTankApp;
 
-    const CoreStorage& get_core_data() const { return core_; }
+    const CoreData& get_core_data() const { return core_; }
     const WaterTankStats& get_stats() const { return stats_; }
     bool is_session_healthy() const { return session_healthy_; }
     bool is_pending_firmware_verify() const { return pending_firmware_verify_; }
@@ -90,8 +90,9 @@ protected:
         default_reading.cm = 50.0f;
         ON_CALL(mock_sensor, read_level(_)).WillByDefault(Return(default_reading));
 
-        ON_CALL(mock_core_storage, load_core(_)).WillByDefault(Return(ESP_OK));
+        ON_CALL(mock_core_storage, init(_, _)).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_core_storage, save_core(_, _)).WillByDefault(Return(ESP_OK));
+        ON_CALL(mock_tank_storage, init_app_data(_, _)).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_tank_storage, load_app_data(_)).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_tank_storage, save_app_data(_, _)).WillByDefault(Return(ESP_OK));
 
@@ -167,8 +168,8 @@ protected:
 TEST_F(WaterTankAppTest, Init_Success_ConfiguresDependencies)
 {
     // 1. Storage is loaded during init
-    EXPECT_CALL(mock_core_storage, load_core(_)).Times(1);
-    EXPECT_CALL(mock_tank_storage, load_app_data(_)).Times(1);
+    EXPECT_CALL(mock_core_storage, init(_, _)).Times(1);
+    EXPECT_CALL(mock_tank_storage, init_app_data(_, _)).Times(1);
 
     // 2. OTA Manager is initialized
     EXPECT_CALL(mock_ota, init(_)).Times(1);
@@ -207,8 +208,7 @@ TEST_F(WaterTankAppTest, Init_FloatSwitchFail_SetsUnhealthySessionAndReturnsErro
 
 TEST_F(WaterTankAppTest, Init_CoreStorageFail_SetsUnhealthySessionAndReturnsError)
 {
-    ON_CALL(mock_core_storage, load_core(_)).WillByDefault(Return(ESP_FAIL));
-    ON_CALL(mock_core_storage, create_default_storage(_, _)).WillByDefault(Return(ESP_FAIL));
+    ON_CALL(mock_core_storage, init(_, _)).WillByDefault(Return(ESP_FAIL));
 
     esp_err_t ret = sut->init(false);
 
@@ -218,8 +218,7 @@ TEST_F(WaterTankAppTest, Init_CoreStorageFail_SetsUnhealthySessionAndReturnsErro
 
 TEST_F(WaterTankAppTest, Init_TankStorageFail_SetsUnhealthySessionAndReturnsError)
 {
-    ON_CALL(mock_tank_storage, load_app_data(_)).WillByDefault(Return(ESP_FAIL));
-    ON_CALL(mock_tank_storage, save_app_data(_, _)).WillByDefault(Return(ESP_FAIL));
+    ON_CALL(mock_tank_storage, init_app_data(_, _)).WillByDefault(Return(ESP_FAIL));
 
     esp_err_t ret = sut->init(false);
 
@@ -267,13 +266,8 @@ TEST_F(WaterTankAppTest, Init_SensorFail_SetsUnhealthySessionAndReturnsError)
 //  Verify behavior when NVS load fails on first boot (it should load defaults)
 TEST_F(WaterTankAppTest, Init_HandlesFirstBoot_CreatesDefaultStorage)
 {
-    // Storage load returns errors
-    ON_CALL(mock_core_storage, load_core(_)).WillByDefault(Return(ESP_FAIL));
-    ON_CALL(mock_tank_storage, load_app_data(_)).WillByDefault(Return(ESP_FAIL));
-
-    // Storage init will create default storage and save
-    EXPECT_CALL(mock_core_storage, create_default_storage(_, _)).WillOnce(Return(ESP_OK));
-    EXPECT_CALL(mock_tank_storage, save_app_data(_, _)).Times(1);
+    EXPECT_CALL(mock_core_storage, init(_, _)).WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_tank_storage, init_app_data(_, _)).WillOnce(Return(ESP_OK));
 
     // Act
     esp_err_t ret = sut->init(false);
@@ -288,7 +282,7 @@ TEST_F(WaterTankAppTest, Init_WakeupByTimer_SetsNormalReadingMode)
     EXPECT_CALL(mock_sleep, get_wakeup_cause()).WillOnce(Return(ESP_SLEEP_WAKEUP_TIMER));
 
     EXPECT_CALL(mock_core_storage, process_boot_reasons(_, ESP_RST_DEEPSLEEP, ESP_SLEEP_WAKEUP_TIMER, _))
-        .WillOnce(testing::Invoke([](CoreStorage& core, esp_reset_reason_t, esp_sleep_wakeup_cause_t, bool&) {
+        .WillOnce(testing::Invoke([](CoreData& core, esp_reset_reason_t, esp_sleep_wakeup_cause_t, bool&) {
             core.last_wake = WakeSource::TIMER;
         }));
 
@@ -306,7 +300,7 @@ TEST_F(WaterTankAppTest, Init_WakeupByGpio_SetsFloatSwitchTriggeredMode)
     EXPECT_CALL(mock_sleep, get_wakeup_cause()).WillOnce(Return(ESP_SLEEP_WAKEUP_GPIO));
 
     EXPECT_CALL(mock_core_storage, process_boot_reasons(_, ESP_RST_DEEPSLEEP, ESP_SLEEP_WAKEUP_GPIO, _))
-        .WillOnce(testing::Invoke([](CoreStorage& core, esp_reset_reason_t, esp_sleep_wakeup_cause_t, bool&) {
+        .WillOnce(testing::Invoke([](CoreData& core, esp_reset_reason_t, esp_sleep_wakeup_cause_t, bool&) {
             core.last_wake = WakeSource::GPIO;
         }));
 
@@ -320,8 +314,7 @@ TEST_F(WaterTankAppTest, Init_WakeupByGpio_SetsFloatSwitchTriggeredMode)
 
 TEST_F(WaterTankAppTest, Init_ResetReasonPanic_IncrementsCrashAndBootCount)
 {
-    // Arrange: Mock load_core to populate initial state
-    EXPECT_CALL(mock_core_storage, load_core(_)).WillOnce(testing::Invoke([](CoreStorage& core) {
+    EXPECT_CALL(mock_core_storage, init(_, _)).WillOnce(testing::Invoke([](CoreData& core, const CoreData&) {
         core.boot_count = 5;
         core.crash_count = 2;
         return ESP_OK;
@@ -331,7 +324,8 @@ TEST_F(WaterTankAppTest, Init_ResetReasonPanic_IncrementsCrashAndBootCount)
 
     EXPECT_CALL(mock_core_storage, process_boot_reasons(_, ESP_RST_PANIC, _, _))
         .WillOnce(
-            testing::Invoke([](CoreStorage& core, esp_reset_reason_t, esp_sleep_wakeup_cause_t, bool& pending_commit) {
+            testing::Invoke([](CoreData& core, esp_reset_reason_t, esp_sleep_wakeup_cause_t, bool& pending_commit) {
+                core.boot_count++;
                 core.crash_count++;
                 core.last_wake = WakeSource::CRASH;
                 pending_commit = true;
@@ -350,8 +344,7 @@ TEST_F(WaterTankAppTest, Init_ResetReasonPanic_IncrementsCrashAndBootCount)
 
 TEST_F(WaterTankAppTest, Init_NormalBoot_IncrementsCyclesSinceNvsCommit)
 {
-    // Arrange: Mock load_app_data to populate initial cycles count
-    EXPECT_CALL(mock_tank_storage, load_app_data(_)).WillOnce(testing::Invoke([](WaterTankStats& stats) {
+    EXPECT_CALL(mock_tank_storage, init_app_data(_, _)).WillOnce(testing::Invoke([](WaterTankStats& stats, const WaterTankStats&) {
         stats.cycles_since_nvs_commit = 3;
         return ESP_OK;
     }));
@@ -695,7 +688,7 @@ TEST_F(WaterTankAppTest, Run_ProcessesCommandsWithAckRequired_SendsConfirmRecept
 
 TEST_F(WaterTankAppTest, Run_PeriodicNvsCommit_ForcesCommitWhenIntervalReached)
 {
-    EXPECT_CALL(mock_tank_storage, load_app_data(_)).WillOnce(Invoke([](WaterTankStats& stats) {
+    EXPECT_CALL(mock_tank_storage, init_app_data(_, _)).WillOnce(Invoke([](WaterTankStats& stats, const WaterTankStats&) {
         stats.cycles_since_nvs_commit = 10;
         return ESP_OK;
     }));
@@ -808,7 +801,7 @@ TEST_F(WaterTankAppTest, CheckFirmware_PopulatesCoreVersionOnSuccess)
     EXPECT_FALSE(sut->is_pending_firmware_verify());
     EXPECT_TRUE(sut->is_pending_core_commit());
 
-    const CoreStorage& core = sut->get_core_data();
+    const CoreData& core = sut->get_core_data();
     EXPECT_EQ(core.fw_major, 1);
     EXPECT_EQ(core.fw_minor, 2);
     EXPECT_EQ(core.fw_patch, 3);

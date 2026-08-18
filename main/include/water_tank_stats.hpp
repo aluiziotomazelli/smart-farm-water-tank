@@ -1,32 +1,33 @@
+// main/include/water_tank_stats.hpp
 #pragma once
 
+#include <cstdint>
+
+#include "app_storage.hpp"
 #include "farm_protocol_types.hpp"
 #include "us_types.hpp"
 #include "water_tank_types.hpp"
 
+// =============================
+//  Water Tank Storage Constants
+// =============================
+static constexpr uint32_t WATER_TANK_STATS_MAGIC = 0x544B4E4B; ///< "TKNK"
+static constexpr uint8_t WATER_TANK_STATS_VERSION = 2;
+
 /**
  * @struct WaterTankStats
- * @brief Persistent and runtime statistics for the Water Tank application.
+ * @brief Pure domain struct representing statistics and state for the Water Tank application.
  *
- * This structure tracks the current state of the tank and accumulated
- * measurement statistics to help with diagnostics and logic decisions.
+ * Contains no storage metadata (magic, version, crc) which are managed by the AppStorage envelope.
  */
 struct WaterTankStats
 {
-    static constexpr uint32_t MAGIC = 0x544B; ///< For CRC validation | 0x544B = "TK"
-    static constexpr uint8_t VERSION = 2;
-
-    // Magic first (validation)
-    uint16_t magic = MAGIC;
-    uint8_t version = VERSION;
-
     // --- Current State ---
     uint16_t level_permille = 0;
     uint16_t last_level_permille = 0;
     FillState fill_state = FillState::UNKNOWN;
     FillState pending_fill_state = FillState::UNKNOWN;
     uint8_t pending_state_count = 0;
-    // It is no longer used for fill state logic (replaced by last_level_permille).
     float last_distance_cm = 0.0f;
     ultrasonic::UsResult last_result = ultrasonic::UsResult::HW_FAULT;
     uint64_t sample_timestamp_ms = 0;
@@ -60,23 +61,14 @@ struct WaterTankStats
     uint8_t last_battery_percent = 0;
     farm::BatteryState last_battery_state = farm::BatteryState::UNKNOWN;
 
-    // CRC MUST BE LAST of the validated fields
-    uint32_t crc = 0;
-
-    // Below: excluded from CRC calculation (after crc), but included in
-    // operator== so it persists in RTC across deep sleep cycles.
+    // RTC persistence tracking
     uint32_t cycles_since_nvs_commit = 0;
 
-    void reset()
-    {
-        *this = {};
-        magic = MAGIC;
-        version = VERSION;
-    }
+    void reset() { *this = {}; }
 
     bool operator==(const WaterTankStats& other) const
     {
-        return magic == other.magic && version == other.version && level_permille == other.level_permille &&
+        return level_permille == other.level_permille &&
                last_level_permille == other.last_level_permille && fill_state == other.fill_state &&
                pending_fill_state == other.pending_fill_state && pending_state_count == other.pending_state_count &&
                last_distance_cm == other.last_distance_cm && last_result == other.last_result &&
@@ -93,3 +85,8 @@ struct WaterTankStats
 
     bool operator!=(const WaterTankStats& other) const { return !(*this == other); }
 };
+
+/**
+ * @brief Storage envelope alias used for allocating physical RTC/NVS storage buffers.
+ */
+using WaterTankStorage = StorageEnvelope<WaterTankStats, WATER_TANK_STATS_MAGIC, WATER_TANK_STATS_VERSION>;

@@ -788,27 +788,18 @@ esp_err_t WaterTankApp::connect_wifi_with_retry(uint8_t max_attempts)
 
 esp_err_t WaterTankApp::init_core_storage()
 {
-    esp_err_t ret = core_storage_.load_core(core_);
+    CoreData default_core = {};
+    default_core.reset();
+    default_core.node_id = farm::NodeId::WATER_TANK;
+    default_core.node_type = farm::NodeType::SENSOR;
+    default_core.power_profile = farm::PowerProfile::DEEP_SLEEP;
 
+    esp_err_t ret = core_storage_.init(core_, default_core);
     if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "Core storage load failed (%s), recreating default storage", esp_err_to_name(ret));
-
-        CoreStorage default_core = {};
-        default_core.reset();
-        default_core.node_id = farm::NodeId::WATER_TANK;
-        default_core.node_type = farm::NodeType::SENSOR;
-        default_core.power_profile = farm::PowerProfile::DEEP_SLEEP;
-
-        ret = core_storage_.create_default_storage(core_, default_core);
-        if (ret != ESP_OK) {
-            return ret;
-        }
-    }
-    else {
-        ESP_LOGI(TAG, "Loaded core data from storage");
+        ESP_LOGE(TAG, "Failed to initialize core storage: %s", esp_err_to_name(ret));
+        return ret;
     }
 
-    core_.boot_count++;
     core_storage_.process_boot_reasons(
         core_, system_hal_.reset_reason(), sleep_.get_wakeup_cause(), pending_core_commit_);
 
@@ -817,24 +808,17 @@ esp_err_t WaterTankApp::init_core_storage()
 
 esp_err_t WaterTankApp::init_tank_storage()
 {
-    esp_err_t ret = tank_storage_.load_app_data(stats_);
+    WaterTankStats default_stats = {};
+    default_stats.reset();
 
-    if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "Loaded tank stats from storage");
-        stats_.cycles_since_nvs_commit++;
-        return ESP_OK;
+    esp_err_t ret = tank_storage_.init_app_data(stats_, default_stats);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize tank storage: %s", esp_err_to_name(ret));
+        return ret;
     }
 
-    ESP_LOGW(TAG, "Tank storage load failed (%s), recreating default storage", esp_err_to_name(ret));
-    stats_.reset();
-    ret = tank_storage_.save_app_data(stats_, /*force_nvs_commit=*/true);
-    if (ret == ESP_OK) {
-        stats_.cycles_since_nvs_commit++;
-        return ESP_OK;
-    }
-
-    ESP_LOGE(TAG, "Failed to initialize tank storage: %s", esp_err_to_name(ret));
-    return ret;
+    stats_.cycles_since_nvs_commit++;
+    return ESP_OK;
 }
 
 void WaterTankApp::process_node_state()

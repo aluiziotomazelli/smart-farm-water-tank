@@ -5,6 +5,7 @@
 
 class MockWaterTankStorage : public IWaterTankNvs {
 public:
+    MOCK_METHOD(esp_err_t, init_app_data, (WaterTankStats &stats, const WaterTankStats &default_stats), (override));
     MOCK_METHOD(esp_err_t, load_app_data, (WaterTankStats &stats), (override));
     MOCK_METHOD(esp_err_t, save_app_data, (const WaterTankStats &stats, bool force_nvs_commit), (override));
 };
