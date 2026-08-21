@@ -1,15 +1,13 @@
 idf_component_register(
     SRCS 
         "main.cpp"
-        "test_water_tank_geometry.cpp"
-        "test_water_tank_logic.cpp"
         "test_water_tank_app.cpp"
         "../../../main/src/tank_geometry.cpp"
         "../../../main/src/water_tank_logic.cpp"
         "../../../main/src/water_tank_app.cpp"
     INCLUDE_DIRS 
         "."
-        "../../common"
+        "../../mocks"
         "../../../main/include"
         "../../../main"
         "../../../components/smart-farm-common/host_test/common"
