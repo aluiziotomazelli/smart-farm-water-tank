@@ -105,7 +105,7 @@ esp_err_t WaterTankApp::init(bool is_logging)
 
     // 8. Connect WiFi & Remote UDP Logging if requested
     if (is_logging) {
-        if (connect_wifi_with_retry() == ESP_OK) {
+        if (wifi_.connect(CONNECT_WIFI_TIMEOUT_MS, /* max attempts = */ 3) == ESP_OK) {
             espnow_.set_channel_policy(espnow::ChannelPolicy::FIXED); // Can be used even before comm init()
             udp_logger::init("192.168.1.23", 4444);
             rtos_.task_delay(pdMS_TO_TICKS(5000));
@@ -356,7 +356,8 @@ void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
     espnow_trigger_.disarm();
 
     espnow_.deinit();
-    disconnect_stop_wifi();
+    wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
+    wifi_.stop(DISCONNECT_WIFI_TIMEOUT_MS);
 
     sleep_.disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
 
@@ -522,7 +523,8 @@ void WaterTankApp::process_command(const espnow::AppMessage& msg, uint64_t& out_
                 rtos_.task_delay(pdMS_TO_TICKS(100)); // Allow TX task time to transmit ACK over the air
             }
             espnow_.deinit();
-            disconnect_stop_wifi();
+            wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
+            wifi_.stop(DISCONNECT_WIFI_TIMEOUT_MS);
             system_hal_.restart();
             break;
 
@@ -579,7 +581,7 @@ void WaterTankApp::process_pending_ota()
     // 2. Connect WiFi if not already connected
     if (wifi_.get_state() != wifi_manager::State::CONNECTED_GOT_IP) {
         ESP_LOGI(TAG, "WiFi not connected. Connecting for OTA...");
-        if (connect_wifi_with_retry() == ESP_OK) {
+        if (wifi_.connect(CONNECT_WIFI_TIMEOUT_MS, /* max attempts = */ 3) == ESP_OK) {
             connected_by_us = true;
         }
         else {
@@ -605,7 +607,8 @@ void WaterTankApp::process_pending_ota()
     // 4. Handle Outcome
     if (status == OtaStatus::READY_TO_RESTART) {
         ESP_LOGI(TAG, "OTA completed successfully. Restarting...");
-        disconnect_stop_wifi();
+        wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
+        wifi_.stop(DISCONNECT_WIFI_TIMEOUT_MS);
         system_hal_.restart();
     }
     else {
@@ -625,24 +628,6 @@ void WaterTankApp::process_pending_ota()
     }
 
     ota_triggered_ = false;
-}
-
-esp_err_t WaterTankApp::disconnect_stop_wifi()
-{
-    esp_err_t ret = ESP_OK;
-    if (wifi_.get_state() != wifi_manager::State::UNINITIALIZED &&
-        wifi_.get_state() != wifi_manager::State::INITIALIZED) {
-        ESP_LOGI(TAG, "Ensuring WiFi is disconnected and stopped...");
-        ret = wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
-        if (ret != ESP_OK) {
-            return ret;
-        }
-        ret = wifi_.stop(DISCONNECT_WIFI_TIMEOUT_MS);
-        if (ret != ESP_OK) {
-            return ret;
-        }
-    }
-    return ret;
 }
 
 // =============================================================================
@@ -739,7 +724,8 @@ void WaterTankApp::check_firmware()
         if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
             send_ota_report(farm::OtaExecResult::ROLLBACK_TRIGGERED, err);
         }
-        disconnect_stop_wifi();
+        wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
+        wifi_.stop(DISCONNECT_WIFI_TIMEOUT_MS);
         ota_manager_.rollback_and_reboot();
         return;
     }
@@ -760,34 +746,6 @@ void WaterTankApp::check_firmware()
     if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
         send_ota_report(farm::OtaExecResult::CONFIRMED_SUCCESS);
     }
-}
-
-esp_err_t WaterTankApp::connect_wifi_with_retry(uint8_t max_attempts)
-{
-    if (wifi_.get_state() == wifi_manager::State::CONNECTED_GOT_IP) {
-        return ESP_OK;
-    }
-
-    static constexpr uint16_t DELAY_BETWEEN_ATTEMPTS_MS = 1500;
-    esp_err_t err = ESP_FAIL;
-    for (uint8_t attempt = 1; attempt <= max_attempts; ++attempt) {
-        ESP_LOGI(TAG, "Connecting to WiFi (attempt %u/%u)...", attempt, max_attempts);
-        err = wifi_.connect(CONNECT_WIFI_TIMEOUT_MS);
-        if (err == ESP_OK) {
-            ESP_LOGI(TAG, "WiFi connected successfully");
-            return ESP_OK;
-        }
-
-        ESP_LOGW(TAG, "WiFi connection attempt %u failed: %s", attempt, esp_err_to_name(err));
-        if (attempt < max_attempts) {
-            wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
-            uint32_t delay_ms = DELAY_BETWEEN_ATTEMPTS_MS * attempt;
-            rtos_.task_delay(pdMS_TO_TICKS(delay_ms));
-        }
-    }
-
-    ESP_LOGE(TAG, "Failed to connect to WiFi after %u attempts: %s", max_attempts, esp_err_to_name(err));
-    return err;
 }
 
 esp_err_t WaterTankApp::init_core_storage()

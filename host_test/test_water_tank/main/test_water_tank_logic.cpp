@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "water_tank_logic.hpp"
-#include "mock_i_float_switch.hpp"
+#include "mock_float_switch.hpp"
 
 using ::testing::Return;
 

@@ -111,7 +111,6 @@ protected:
     void process_pending_ota();
     void enter_deep_sleep(uint64_t sleep_time_us);
     void save_persistent_state();
-    esp_err_t disconnect_stop_wifi();
     void process_command(const espnow::AppMessage& msg, uint64_t& out_override_sleep_us);
     void send_cmd_ack(const espnow::AppMessage& msg, espnow::AckStatus status);
     esp_err_t send_ota_report(farm::OtaExecResult result, farm::OtaErrorCode error_code = farm::OtaErrorCode::NONE);
@@ -127,5 +126,4 @@ protected:
 
     esp_err_t init_tank_storage();
     void check_firmware();
-    esp_err_t connect_wifi_with_retry(uint8_t max_attempts = 2);
 };

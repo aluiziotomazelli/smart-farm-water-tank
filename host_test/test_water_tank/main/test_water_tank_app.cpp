@@ -4,21 +4,21 @@
 #include "water_tank_app.hpp"
 #include "espnow_ota_trigger.hpp"
 #include "mock_i_level_sensor.hpp"
-#include "mock_i_float_switch.hpp"
+#include "mock_float_switch.hpp"
 #include "mock_i_water_tank_storage.hpp"
-#include "mock_i_espnow_manager.hpp"
+#include "mock_espnow_manager.hpp"
 #include "mock_i_wifi_manager.hpp"
 #include "mock_i_power_control.hpp"
 #include "mock_hal_sleep.hpp"
 #include "mock_i_battery_monitor.hpp"
 #include "tank_geometry.hpp"
 #include "mock_hal_timer.hpp"
-#include "mock_i_ota_manager.hpp"
+#include "mock_ota_manager.hpp"
 #include "mock_hal_freertos.hpp"
 #include "mock_i_ota_trigger.hpp"
 #include "mock_hal_system.hpp"
 #include "mock_nvs_core.hpp"
-#include "mock_i_time_manager.hpp"
+#include "mock_time_manager.hpp"
 
 using ::testing::_;
 using ::testing::AnyNumber;
@@ -73,7 +73,7 @@ protected:
     NiceMock<MockOtaTrigger> mock_espnow_trigger;
     NiceMock<idf_hals::MockSystemHAL> mock_system_hal;
     NiceMock<wifi_manager::MockWiFiManager> mock_wifi;
-    NiceMock<MockTimeManager> mock_time_manager;
+    NiceMock<time_manager::MockTimeManager> mock_time_manager;
 
     TankGeometry geometry{10}; // offset 10cm (uint8_t)
     WaterTankLogic logic{geometry, mock_float_switch};
@@ -362,14 +362,10 @@ TEST_F(WaterTankAppTest, Init_WithLogging_ConfiguresFixedChannelPolicyAndRetries
     // Arrange: Mock ESP-NOW channel policy set call (called once when logging is enabled)
     EXPECT_CALL(mock_comm, set_channel_policy(espnow::ChannelPolicy::FIXED)).Times(1);
 
-    // Mock initial state as not connected so connect_wifi_with_retry executes loop
+    // Mock initial state as not connected so connect executes
     EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::STARTED));
 
-    // Mock first connect attempt fails, second succeeds
-    InSequence seq;
-    EXPECT_CALL(mock_wifi, connect(_)).WillOnce(Return(ESP_FAIL));
-    EXPECT_CALL(mock_wifi, disconnect(_)).WillOnce(Return(ESP_OK));
-    EXPECT_CALL(mock_wifi, connect(_)).WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_wifi, connect(_, _, _)).WillOnce(Return(ESP_OK));
 
     // Act
     esp_err_t ret = sut->init(true);
@@ -750,7 +746,7 @@ TEST_F(WaterTankAppTest, WaitForCommReady_WaitsAndReturnsFalseIfTimeout)
 TEST_F(WaterTankAppTest, ProcessPendingOta_ConnectsWifiAndRollbacksOnFail)
 {
     EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::INITIALIZED));
-    EXPECT_CALL(mock_wifi, connect(_)).WillRepeatedly(Return(ESP_FAIL));
+    EXPECT_CALL(mock_wifi, connect(_, _, _)).WillRepeatedly(Return(ESP_FAIL));
 
     EXPECT_CALL(mock_comm, deinit()).Times(1);
 

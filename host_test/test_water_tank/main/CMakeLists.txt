@@ -14,6 +14,13 @@ idf_component_register(
         "../../../main"
         "../../../components/smart-farm-common/host_test/common"
         "../../../components/idf_hals/mocks"
+        "../../../components/wifi_manager/include/mocks"
+        "../../../components/espnow_manager/include/mocks"
+        "../../../components/battery_monitor/host_test/mocks"
+        "../../../components/ota_manager/host_test/mocks"
+        "../../../components/time_manager/host_test/mocks"
+        "../../../components/floatswitch/include/mocks"
+        "../../../components/ultrasonic_sensor/include/mocks"
     REQUIRES 
         gtest
         smart-farm-common
