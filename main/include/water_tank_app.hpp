@@ -18,6 +18,8 @@
 #include "interfaces/i_ota_manager.hpp"
 #include "interfaces/i_hal_system.hpp"
 #include "interfaces/i_time_manager.hpp"
+#include "interfaces/i_led_controller.hpp"
+#include "led_controller_types.hpp"
 
 #include "water_tank_logic.hpp"
 #include "water_tank_stats.hpp"
@@ -48,7 +50,8 @@ public:
         IOtaTrigger& btn_trigger,
         IOtaTrigger& espnow_trigger,
         idf_hals::ISystemHAL& system_hal,
-        time_manager::ITimeManager& time_manager);
+        time_manager::ITimeManager& time_manager,
+        ILedController& led_controller);
 
     /**
      * @brief Initialize application state, dependencies and check OTA status.
@@ -84,6 +87,7 @@ private:
     IOtaTrigger& espnow_trigger_;
     idf_hals::ISystemHAL& system_hal_;
     time_manager::ITimeManager& time_manager_;
+    ILedController& led_controller_;
 
     std::atomic<bool> ota_triggered_{false};
 

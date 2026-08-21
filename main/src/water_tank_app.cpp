@@ -51,7 +51,8 @@ WaterTankApp::WaterTankApp(
     IOtaTrigger& btn_trigger,
     IOtaTrigger& espnow_trigger,
     idf_hals::ISystemHAL& system_hal,
-    time_manager::ITimeManager& time_manager)
+    time_manager::ITimeManager& time_manager,
+    ILedController& led_controller)
     : core_storage_(core_storage)
     , tank_storage_(tank_storage)
     , sensor_(sensor)
@@ -70,6 +71,7 @@ WaterTankApp::WaterTankApp(
     , espnow_trigger_(espnow_trigger)
     , system_hal_(system_hal)
     , time_manager_(time_manager)
+    , led_controller_(led_controller)
 {
 }
 

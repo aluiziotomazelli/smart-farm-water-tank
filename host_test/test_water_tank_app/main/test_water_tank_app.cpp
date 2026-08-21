@@ -19,6 +19,7 @@
 #include "mock_hal_system.hpp"
 #include "mock_nvs_core.hpp"
 #include "mock_time_manager.hpp"
+#include "mock_led_controller.hpp"
 
 using ::testing::_;
 using ::testing::AnyNumber;
@@ -72,6 +73,7 @@ protected:
     NiceMock<idf_hals::MockSystemHAL> mock_system_hal;
     NiceMock<wifi_manager::MockWiFiManager> mock_wifi;
     NiceMock<time_manager::MockTimeManager> mock_time_manager;
+    NiceMock<MockLedController> mock_led_controller;
 
     TankGeometry geometry{10}; // offset 10cm (uint8_t)
     WaterTankLogic logic{geometry, mock_float_switch};
@@ -149,7 +151,8 @@ protected:
             mock_btn_trigger,
             espnow_trig,
             mock_system_hal,
-            mock_time_manager);
+            mock_time_manager,
+            mock_led_controller);
         if (auto_init) {
             app->init(false);
         }

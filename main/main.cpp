@@ -17,6 +17,8 @@
 #include "espnow_ota_trigger.hpp"
 #include "wifi_manager.hpp"
 
+#include "led_controller.hpp"
+
 #include "battery_monitor.hpp"
 #include "adc_battery_reader.hpp"
 #include "hal_adc_oneshot.hpp"
@@ -48,7 +50,8 @@ static constexpr gpio_num_t US_TRIG_GPIO = GPIO_NUM_4;       // D2
 static constexpr gpio_num_t US_ECHO_GPIO = GPIO_NUM_5;       // D3
 static constexpr gpio_num_t FLOAT_SWITCH_GPIO = GPIO_NUM_2;  // D0 need be D0-D3 GPIO 3-5 to enable deep-sleep wake-up
 static constexpr gpio_num_t BATTERY_LEVEL_GPIO = GPIO_NUM_3; // D1
-static constexpr gpio_num_t BOOT_BUTTON_GPIO = GPIO_NUM_9;   // Boot button has no external pad
+static constexpr gpio_num_t STATUS_LED_GPIO = GPIO_NUM_8;    // D8 on Xiao ESP32-C3
+static constexpr gpio_num_t BOOT_BUTTON_GPIO = GPIO_NUM_9;   // D9
 
 static constexpr const char* CORE_NVS_KEY = "core";
 static constexpr const char* STATS_NVS_KEY = "tank_stats";
@@ -161,6 +164,15 @@ static OtaManager ota_manager(ota_deps);
 static ButtonOtaTrigger btn_trigger(hal_gpio, hal_freertos, BOOT_BUTTON_GPIO, 200);
 static EspNowOtaTrigger espnow_ota_trigger;
 
+// Status LED Controller
+static LedConfig led_config{
+    .gpio_num = STATUS_LED_GPIO,
+    .task_stack_size = 2048,
+    .task_priority = 1,
+    .active_level = 1,
+};
+static LedController led_controller{hal_gpio, hal_freertos, led_config};
+
 #include "udp_logger.hpp"
 
 extern "C" void app_main()
@@ -194,7 +206,8 @@ extern "C" void app_main()
         btn_trigger,
         espnow_ota_trigger,
         hal_system,
-        time_mgr);
+        time_mgr,
+        led_controller);
 
     // Initialize application state (enable remote logging for field tests)
 
