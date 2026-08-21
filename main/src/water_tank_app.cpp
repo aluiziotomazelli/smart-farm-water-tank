@@ -79,14 +79,22 @@ void WaterTankApp::on_ota_triggered(OtaTriggerSource source)
 {
     ESP_LOGI(TAG, "OTA triggered from source: %d", static_cast<int>(source));
     ota_triggered_ = true;
+    led_controller_.set_pattern(BlinkPattern::OTA_UPDATING);
 }
 
 esp_err_t WaterTankApp::init(bool is_logging)
 {
     esp_err_t err;
 
+    // 0. Initialize and start Status LED Controller
+    if ((err = led_controller_.init()) != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to initialize LedController: %s", esp_err_to_name(err));
+    }
+    led_controller_.start();
+
     // 1. OTA Manager first to handle OTA updates
     if ((err = init_ota_manager()) != ESP_OK) {
+        led_controller_.set_pattern(BlinkPattern::ERROR_BURST);
         return err;
     }
 
@@ -148,8 +156,9 @@ esp_err_t WaterTankApp::init(bool is_logging)
         }
     }
 
-    // 9. Roolback if session is not healthy
+    // 9. Rollback if session is not healthy
     if (!session_healthy_) {
+        led_controller_.set_pattern(BlinkPattern::ERROR_BURST);
         if (ota_manager_.check_pending_verify()) {
             ESP_LOGE(TAG, "Session is not healthy during OTA verification.");
             check_firmware_healthy();
@@ -157,6 +166,7 @@ esp_err_t WaterTankApp::init(bool is_logging)
         return ESP_FAIL;
     }
 
+    led_controller_.set_pattern(BlinkPattern::BOOT_SUCCESS);
     return ESP_OK;
 }
 
@@ -315,6 +325,7 @@ farm::WaterLevelReport WaterTankApp::create_report() const
 
 esp_err_t WaterTankApp::send_report(const farm::WaterLevelReport& report)
 {
+    led_controller_.pulse(30);
     return espnow_.send_data(
         espnow::ReservedIds::HUB,
         static_cast<espnow::PayloadType>(farm::PayloadType::WATER_LEVEL_REPORT),
@@ -347,6 +358,8 @@ void WaterTankApp::retry_reading_if_needed(ultrasonic::Reading& reading)
 void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
 {
     ESP_LOGI(TAG, "Entering deep sleep for %llu s", sleep_time_us / 1000000);
+
+    led_controller_.stop();
 
     // Disarm triggers before going to sleep
     btn_trigger_.disarm();
@@ -618,12 +631,14 @@ void WaterTankApp::process_pending_ota()
                 err_code = farm::OtaErrorCode::WATCHDOG_TIMEOUT;
                 ESP_LOGE(TAG, "OTA watchdog timeout (%u ms)", static_cast<unsigned int>(elapsed_ms));
             }
+            led_controller_.set_pattern(BlinkPattern::ERROR_BURST);
         }
     }
     else {
         ESP_LOGE(TAG, "Failed to connect to WiFi for OTA");
         exec_result = farm::OtaExecResult::DOWNLOAD_FAILED;
         err_code = farm::OtaErrorCode::WIFI_CONNECT_FAILED;
+        led_controller_.set_pattern(BlinkPattern::ERROR_BURST);
     }
 
     ota_manager_.cancel_ota();
@@ -716,6 +731,7 @@ void WaterTankApp::check_firmware_healthy()
             !session_healthy_ ? farm::OtaErrorCode::HEALTH_CHECK_FAILED : farm::OtaErrorCode::PARTITION_CONFIRM_FAILED;
 
         ESP_LOGE(TAG, "Failed to confirm firmware. Triggering rollback (reason: %d).", static_cast<int>(err));
+        led_controller_.set_pattern(BlinkPattern::ERROR_BURST);
 
         if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
             send_ota_report(farm::OtaExecResult::ROLLBACK_TRIGGERED, err);
@@ -728,6 +744,7 @@ void WaterTankApp::check_firmware_healthy()
 
     pending_core_commit_ = true;
     ESP_LOGI(TAG, "Firmware confirmed successfully. Versio: %d.%d.%d", core_.fw_major, core_.fw_minor, core_.fw_patch);
+    led_controller_.set_pattern(BlinkPattern::BOOT_SUCCESS);
 
     if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
         send_ota_report(farm::OtaExecResult::CONFIRMED_SUCCESS, farm::OtaErrorCode::NONE);
@@ -774,14 +791,19 @@ void WaterTankApp::process_node_state()
     espnow::NodeState state = espnow_.get_node_state();
     if (state == espnow::NodeState::OPERATIONAL) {
         ESP_LOGI(TAG, "ESP-NOW NodeState OPERATIONAL");
+        if (led_controller_.get_current_pattern() == BlinkPattern::PAIRING_MODE) {
+            led_controller_.set_pattern(BlinkPattern::OFF);
+        }
         return;
     }
 
     if (state == espnow::NodeState::PAIRING || state == espnow::NodeState::PAIRING_SCAN) {
         ESP_LOGI(TAG, "ESP-NOW NodeState PAIRING");
+        led_controller_.set_pattern(BlinkPattern::PAIRING_MODE);
         esp_err_t ret = espnow_.add_peer(espnow::ReservedIds::HUB, HUB_MAC, espnow::ReservedTypes::HUB, 0);
         if (ret == ESP_OK) {
             ESP_LOGW(TAG, "HUB added as peer");
+            led_controller_.set_pattern(BlinkPattern::OFF);
             return;
         }
         wait_for_pairing(PAIRING_TIMEOUT_MS);

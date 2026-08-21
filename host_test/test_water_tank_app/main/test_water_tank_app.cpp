@@ -950,3 +950,65 @@ TEST_F(WaterTankAppTest, Run_HighVarianceSensorResult_RetriesWith1_8xSamples)
     EXPECT_GT(sut->get_stats().level_permille, 0);
 }
 
+// ==============================================================================
+// LED Status Indicator Tests
+// ==============================================================================
+
+TEST_F(WaterTankAppTest, Init_Success_SetsBootSuccessPattern)
+{
+    EXPECT_CALL(mock_led_controller, init()).WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_led_controller, start()).WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_led_controller, set_pattern(BlinkPattern::BOOT_SUCCESS)).Times(1);
+
+    EXPECT_EQ(sut->init(false), ESP_OK);
+}
+
+TEST_F(WaterTankAppTest, Init_Failure_SetsErrorBurstPattern)
+{
+    ON_CALL(mock_core_storage, init(_, _)).WillByDefault(Return(ESP_FAIL));
+
+    EXPECT_CALL(mock_led_controller, set_pattern(BlinkPattern::ERROR_BURST)).Times(1);
+
+    EXPECT_EQ(sut->init(false), ESP_FAIL);
+}
+
+TEST_F(WaterTankAppTest, Run_SendsReport_PulsesLed)
+{
+    sut->init(false);
+
+    EXPECT_CALL(mock_led_controller, pulse(30)).Times(::testing::AtLeast(1));
+
+    sut->run(true);
+}
+
+TEST_F(WaterTankAppTest, Run_EntersDeepSleep_StopsLed)
+{
+    sut->init(false);
+
+    EXPECT_CALL(mock_led_controller, stop()).Times(1);
+
+    sut->run(true);
+}
+
+TEST_F(WaterTankAppTest, OnOtaTriggered_SetsOtaUpdatingPattern)
+{
+    EXPECT_CALL(mock_led_controller, set_pattern(BlinkPattern::OTA_UPDATING)).Times(1);
+
+    sut->on_ota_triggered(OtaTriggerSource::BUTTON);
+}
+
+TEST_F(WaterTankAppTest, Run_PairingNodeState_SetsPairingPatternAndClearsWhenOperational)
+{
+    EXPECT_CALL(mock_comm, get_node_state())
+        .WillOnce(Return(espnow::NodeState::PAIRING))
+        .WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
+
+    EXPECT_CALL(mock_comm, add_peer(espnow::ReservedIds::HUB, _, espnow::ReservedTypes::HUB, 0))
+        .WillOnce(Return(ESP_OK));
+
+    EXPECT_CALL(mock_led_controller, set_pattern(BlinkPattern::PAIRING_MODE)).Times(1);
+    EXPECT_CALL(mock_led_controller, set_pattern(BlinkPattern::OFF)).Times(1);
+
+    sut->run(true);
+}
+
