@@ -92,7 +92,6 @@ protected:
     CoreData core_;
 
     bool session_healthy_ = true;
-    bool pending_firmware_verify_ = false;
     bool pending_core_commit_ = false;
     bool pending_tank_commit_ = false;
 
@@ -104,7 +103,6 @@ protected:
     esp_err_t send_report(const farm::WaterLevelReport& report);
 
     void retry_reading_if_needed(ultrasonic::Reading& reading);
-    farm::SensorStatus map_status(ultrasonic::UsResult result) const;
     bool wait_for_comm_ready(uint32_t timeout_ms);
     void wait_for_pairing(uint32_t timeout_ms);
     uint64_t listen_for_messages(uint32_t timeout_ms);
@@ -114,7 +112,6 @@ protected:
     void process_command(const espnow::AppMessage& msg, uint64_t& out_override_sleep_us);
     void send_cmd_ack(const espnow::AppMessage& msg, espnow::AckStatus status);
     esp_err_t send_ota_report(farm::OtaExecResult result, farm::OtaErrorCode error_code = farm::OtaErrorCode::NONE);
-    farm::OtaErrorCode map_ota_fail_reason(OtaFailReason reason) const;
     void report_ota_failure_and_restore_comm(farm::OtaErrorCode err_code, bool connected_by_us);
 
     esp_err_t init_wifi();
@@ -125,5 +122,6 @@ protected:
     void sync_time_from_espnow_packet(const farm::TimeSyncCommand& cmd);
 
     esp_err_t init_tank_storage();
-    void check_firmware();
+    void update_running_version();
+    void check_firmware_healthy();
 };

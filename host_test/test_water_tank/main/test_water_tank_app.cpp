@@ -40,15 +40,13 @@ public:
     const CoreData& get_core_data() const { return core_; }
     const WaterTankStats& get_stats() const { return stats_; }
     bool is_session_healthy() const { return session_healthy_; }
-    bool is_pending_firmware_verify() const { return pending_firmware_verify_; }
     bool is_pending_core_commit() const { return pending_core_commit_; }
 
     void set_session_healthy(bool healthy) { session_healthy_ = healthy; }
-    void set_pending_firmware_verify(bool pending) { pending_firmware_verify_ = pending; }
 
     bool call_wait_for_comm_ready(uint32_t timeout_ms) { return wait_for_comm_ready(timeout_ms); }
     void call_process_pending_ota() { process_pending_ota(); }
-    void call_check_firmware() { check_firmware(); }
+    void call_check_firmware_healthy() { check_firmware_healthy(); }
 };
 
 /**
@@ -457,9 +455,9 @@ TEST_F(WaterTankAppTest, Run_WhenRecoveryScan_WaitsCommReadyAndRetriesReportSend
 
 // --- OTA Management ---
 
-TEST_F(WaterTankAppTest, Init_PendingFirmwareVerify_MarksPartitionValid_WhenSessionHealthy)
+TEST_F(WaterTankAppTest, Run_PendingFirmwareVerify_MarksPartitionValid_WhenSessionHealthy)
 {
-    // Arrange: Mock pending OTA verification state
+    // Arrange: Mock pending OTA verification state in run()
     EXPECT_CALL(mock_ota, check_pending_verify()).WillOnce(Return(true));
     EXPECT_CALL(mock_ota, confirm_app_valid()).WillOnce(Return(true));
     EXPECT_CALL(mock_comm, get_node_state()).WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
@@ -468,7 +466,6 @@ TEST_F(WaterTankAppTest, Init_PendingFirmwareVerify_MarksPartitionValid_WhenSess
     // Act: init and run
     esp_err_t ret = sut->init(false);
     EXPECT_EQ(ret, ESP_OK);
-    EXPECT_TRUE(sut->is_pending_firmware_verify());
 
     sut->run(true);
 }
@@ -751,7 +748,7 @@ TEST_F(WaterTankAppTest, ProcessPendingOta_ConnectsWifiAndRollbacksOnFail)
     EXPECT_CALL(mock_comm, deinit()).Times(1);
 
     EXPECT_CALL(mock_comm, init(_)).WillOnce(Return(ESP_OK));
-    EXPECT_CALL(mock_comm, set_channel_policy(espnow::ChannelPolicy::FIXED)).Times(1);
+    EXPECT_CALL(mock_comm, set_channel_policy(espnow::ChannelPolicy::SCAN)).Times(1);
     EXPECT_CALL(mock_comm, get_node_state()).WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
     EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).WillOnce(Return(ESP_OK));
 
@@ -779,22 +776,25 @@ TEST_F(WaterTankAppTest, ProcessPendingOta_FailsOnWatchdogTimeoutAndLogs)
     sut->call_process_pending_ota();
 }
 
-TEST_F(WaterTankAppTest, CheckFirmware_PopulatesCoreVersionOnSuccess)
+TEST_F(WaterTankAppTest, CheckFirmwareHealthy_ConfirmsAppAndSendsReportOnSuccess)
 {
-    sut->set_pending_firmware_verify(true);
     sut->set_session_healthy(true);
 
     EXPECT_CALL(mock_ota, confirm_app_valid()).WillOnce(Return(true));
 
-    OtaVersion mock_desc{1, 2, 3};
-    EXPECT_CALL(mock_ota, get_running_version()).WillRepeatedly(Return(mock_desc));
-
     EXPECT_CALL(mock_comm, get_node_state()).WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
     EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).WillOnce(Return(ESP_OK));
 
-    sut->call_check_firmware();
+    sut->call_check_firmware_healthy();
+}
 
-    EXPECT_FALSE(sut->is_pending_firmware_verify());
+TEST_F(WaterTankAppTest, UpdateRunningVersion_PopulatesCoreVersion)
+{
+    OtaVersion mock_desc{1, 2, 3};
+    EXPECT_CALL(mock_ota, get_running_version()).WillRepeatedly(Return(mock_desc));
+
+    sut->init(false);
+
     EXPECT_TRUE(sut->is_pending_core_commit());
 
     const CoreData& core = sut->get_core_data();
