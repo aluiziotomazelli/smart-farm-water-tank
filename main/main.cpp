@@ -89,7 +89,8 @@ static battery_monitor::BatteryAdcConfig adc_config = {
 
 static battery_monitor::BatteryMonitorConfig monitor_config = {
     .divider_top_ohms = 240000,
-    .divider_bottom_ohms = 240000};
+    .divider_bottom_ohms = 240000,
+    .chemistry = battery_monitor::BatteryChemistry::LI_ION_18650};
 
 static battery_monitor::AdcBatteryReader adc_reader{oneshot_hal, cali_hal, hal_sys_rom, adc_config};
 static battery_monitor::BatteryMonitor bat_monitor{adc_reader, monitor_config};

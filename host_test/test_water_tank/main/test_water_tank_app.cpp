@@ -553,6 +553,8 @@ TEST_F(WaterTankAppTest, Run_ReadsBattery_UpdatesStatsAndDeinits)
 
     battery_monitor::BatteryReading bat_reading{};
     bat_reading.voltage_mv = 3800;
+    bat_reading.percent = 85;
+    bat_reading.state = battery_monitor::BatteryState::NORMAL;
 
     EXPECT_CALL(mock_battery, init()).WillOnce(Return(ESP_OK));
     EXPECT_CALL(mock_battery, read(_)).WillOnce(DoAll(SetArgReferee<0>(bat_reading), Return(ESP_OK)));
@@ -561,6 +563,8 @@ TEST_F(WaterTankAppTest, Run_ReadsBattery_UpdatesStatsAndDeinits)
     sut->run(true);
 
     EXPECT_EQ(sut->get_stats().last_battery_mv, 3800);
+    EXPECT_EQ(sut->get_stats().last_battery_percent, 85);
+    EXPECT_EQ(sut->get_stats().last_battery_state, farm::BatteryState::NORMAL);
 }
 
 TEST_F(WaterTankAppTest, Run_SendsFloatSwitchFullFlagInReport)

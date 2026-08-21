@@ -177,7 +177,9 @@ bool WaterTankApp::run(bool enter_sleep)
     if (battery_monitor_.init() == ESP_OK) {
         battery_monitor::BatteryReading bat_reading;
         if (battery_monitor_.read(bat_reading) == ESP_OK) {
-            logic_.process_battery(bat_reading.voltage_mv, stats_);
+            stats_.last_battery_mv = bat_reading.voltage_mv;
+            stats_.last_battery_percent = bat_reading.percent;
+            stats_.last_battery_state = static_cast<farm::BatteryState>(bat_reading.state);
             battery_monitor_.deinit();
         }
     }
