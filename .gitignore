@@ -19,6 +19,8 @@ host_test/Testing/
 .cache/
 *.code-workspace
 .agents/
+.clangd
+.clangd/
 
 # OS
 .DS_Store
