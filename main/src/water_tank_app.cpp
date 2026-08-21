@@ -28,8 +28,6 @@ static constexpr uint32_t PAIRING_TIMEOUT_MS = 60000;
 static constexpr uint16_t CONNECT_WIFI_TIMEOUT_MS = 15000;
 static constexpr uint16_t DISCONNECT_WIFI_TIMEOUT_MS = 2000;
 
-static constexpr uint8_t HUB_MAC_ADRESS[] = {HUB_MAC_0, HUB_MAC_1, HUB_MAC_2, HUB_MAC_3, HUB_MAC_4, HUB_MAC_5};
-
 static const char* TAG = "WaterTankApp";
 
 // Forward
@@ -779,7 +777,7 @@ void WaterTankApp::process_node_state()
 
     if (state == espnow::NodeState::PAIRING || state == espnow::NodeState::PAIRING_SCAN) {
         ESP_LOGI(TAG, "ESP-NOW NodeState PAIRING");
-        esp_err_t ret = espnow_.add_peer(espnow::ReservedIds::HUB, HUB_MAC_ADRESS, espnow::ReservedTypes::HUB, 0);
+        esp_err_t ret = espnow_.add_peer(espnow::ReservedIds::HUB, HUB_MAC, espnow::ReservedTypes::HUB, 0);
         if (ret == ESP_OK) {
             ESP_LOGW(TAG, "HUB added as peer");
             return;
