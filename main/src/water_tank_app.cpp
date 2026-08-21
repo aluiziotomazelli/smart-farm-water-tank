@@ -233,6 +233,7 @@ bool WaterTankApp::run(bool enter_sleep)
         ESP_LOGI(TAG, "Report sent to Hub");
     }
     else {
+        ESP_LOGW(TAG, "Failed to send report on first attempt: %s", esp_err_to_name(send_err));
         if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
             send_err = send_report(report);
             if (send_err == ESP_OK) {
@@ -426,7 +427,7 @@ bool WaterTankApp::wait_for_comm_ready(uint32_t timeout_ms)
 {
     espnow::NodeState state = espnow_.get_node_state();
 
-    if (state == espnow::NodeState::RECOVERY_SCAN) {
+    if (state == espnow::NodeState::RECOVERY_SCAN || state == espnow::NodeState::IDLE) {
         constexpr uint32_t POLL_DELAY_MS = 100;
         int64_t deadline_ms = (sys_timer_.get_time_us() / 1000) + timeout_ms;
 
@@ -688,7 +689,10 @@ esp_err_t WaterTankApp::init_espnow()
     config.node_type = static_cast<espnow::NodeType>(farm::NodeType::SENSOR);
     config.app_rx_queue = rx_queue_;
     config.wifi_channel = 1;
-    config.heartbeat_interval_ms = 0;
+    config.heartbeat_interval_ms = 60000 * 5; // 5 minutes
+    config.enable_heartbeat = false;
+    config.logical_ack_retries = 2;
+    config.ack_timeout_ms = 350;
 
     esp_err_t err;
     if ((err = espnow_.init(config)) != ESP_OK) {
