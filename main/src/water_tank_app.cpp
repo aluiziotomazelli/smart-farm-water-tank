@@ -327,7 +327,7 @@ farm::WaterLevelReport WaterTankApp::create_report() const
 
 esp_err_t WaterTankApp::send_report(const farm::WaterLevelReport& report)
 {
-    led_controller_.pulse(30);
+    led_controller_.set_pattern(BlinkPattern::TX_PULSE);
     return espnow_.send_data(
         espnow::ReservedIds::HUB,
         static_cast<espnow::PayloadType>(farm::PayloadType::WATER_LEVEL_REPORT),

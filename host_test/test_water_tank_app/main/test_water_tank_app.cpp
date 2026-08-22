@@ -980,7 +980,7 @@ TEST_F(WaterTankAppTest, Run_SendsReport_PulsesLed)
 {
     sut->init(false);
 
-    EXPECT_CALL(mock_led_controller, pulse(30)).Times(::testing::AtLeast(1));
+    EXPECT_CALL(mock_led_controller, set_pattern(BlinkPattern::TX_PULSE)).Times(::testing::AtLeast(1));
 
     sut->run(true);
 }
@@ -1012,6 +1012,7 @@ TEST_F(WaterTankAppTest, Run_PairingNodeState_SetsPairingPatternAndClearsWhenOpe
 
     EXPECT_CALL(mock_led_controller, set_pattern(BlinkPattern::PAIRING_MODE)).Times(1);
     EXPECT_CALL(mock_led_controller, set_pattern(BlinkPattern::OFF)).Times(1);
+    EXPECT_CALL(mock_led_controller, set_pattern(BlinkPattern::TX_PULSE)).Times(::testing::AtLeast(1));
 
     sut->run(true);
 }
