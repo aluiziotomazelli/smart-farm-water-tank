@@ -345,10 +345,11 @@ TEST_F(WaterTankAppTest, Init_ResetReasonPanic_IncrementsCrashAndBootCount)
 
 TEST_F(WaterTankAppTest, Init_NormalBoot_IncrementsCyclesSinceNvsCommit)
 {
-    EXPECT_CALL(mock_tank_storage, init_app_data(_, _)).WillOnce(testing::Invoke([](WaterTankStats& stats, const WaterTankStats&) {
-        stats.cycles_since_nvs_commit = 3;
-        return ESP_OK;
-    }));
+    EXPECT_CALL(mock_tank_storage, init_app_data(_, _))
+        .WillOnce(testing::Invoke([](WaterTankStats& stats, const WaterTankStats&) {
+            stats.cycles_since_nvs_commit = 3;
+            return ESP_OK;
+        }));
 
     // Act
     esp_err_t ret = sut->init(false);
@@ -678,8 +679,7 @@ TEST_F(WaterTankAppTest, Run_ProcessesCommandsWithAckRequired_SendsConfirmRecept
             return pdPASS;
         }));
 
-    EXPECT_CALL(mock_comm, confirm_reception(msg.sender_id, 42, espnow::AckStatus::OK))
-        .WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_comm, confirm_reception(msg.sender_id, 42, espnow::AckStatus::OK)).WillOnce(Return(ESP_OK));
 
     EXPECT_CALL(mock_sleep, enable_timer_wakeup(60000000ULL)).WillOnce(Return(ESP_OK));
 
@@ -688,10 +688,11 @@ TEST_F(WaterTankAppTest, Run_ProcessesCommandsWithAckRequired_SendsConfirmRecept
 
 TEST_F(WaterTankAppTest, Run_PeriodicNvsCommit_ForcesCommitWhenIntervalReached)
 {
-    EXPECT_CALL(mock_tank_storage, init_app_data(_, _)).WillOnce(Invoke([](WaterTankStats& stats, const WaterTankStats&) {
-        stats.cycles_since_nvs_commit = 10;
-        return ESP_OK;
-    }));
+    EXPECT_CALL(mock_tank_storage, init_app_data(_, _))
+        .WillOnce(Invoke([](WaterTankStats& stats, const WaterTankStats&) {
+            stats.cycles_since_nvs_commit = 10;
+            return ESP_OK;
+        }));
 
     sut->init(false);
 
@@ -855,12 +856,13 @@ TEST_F(WaterTankAppTest, Run_UnsynchronizedTime_DoesNotSendActiveTimeSyncRequest
 
     bool time_sync_requested = false;
     EXPECT_CALL(mock_comm, send_data(_, _, _, _, _))
-        .WillRepeatedly(Invoke([&time_sync_requested](uint8_t dest, uint8_t type, const void* data, size_t len, bool ack) {
-            if (type == static_cast<uint8_t>(farm::PayloadType::REQUEST_TIME_SYNC)) {
-                time_sync_requested = true;
-            }
-            return ESP_OK;
-        }));
+        .WillRepeatedly(
+            Invoke([&time_sync_requested](uint8_t dest, uint8_t type, const void* data, size_t len, bool ack) {
+                if (type == static_cast<uint8_t>(farm::PayloadType::REQUEST_TIME_SYNC)) {
+                    time_sync_requested = true;
+                }
+                return ESP_OK;
+            }));
 
     sut->run(true);
 
@@ -894,11 +896,13 @@ TEST_F(WaterTankAppTest, Run_ProcessesMultipleCommandsInListenWindow)
         .WillRepeatedly(Invoke([sync_msg, sleep_msg, &call_count](QueueHandle_t, void* data, TickType_t) {
             call_count++;
             if (call_count == 1) {
-                if (data) *static_cast<espnow::AppMessage*>(data) = sync_msg;
+                if (data)
+                    *static_cast<espnow::AppMessage*>(data) = sync_msg;
                 return pdPASS;
             }
             if (call_count == 2) {
-                if (data) *static_cast<espnow::AppMessage*>(data) = sleep_msg;
+                if (data)
+                    *static_cast<espnow::AppMessage*>(data) = sleep_msg;
                 return pdPASS;
             }
             return pdFAIL;
@@ -1011,4 +1015,3 @@ TEST_F(WaterTankAppTest, Run_PairingNodeState_SetsPairingPatternAndClearsWhenOpe
 
     sut->run(true);
 }
-

@@ -241,6 +241,7 @@ bool WaterTankApp::run(bool enter_sleep)
     }
     else {
         ESP_LOGW(TAG, "Failed to send report on first attempt: %s", esp_err_to_name(send_err));
+        led_controller_.set_pattern(BlinkPattern::ERROR_BURST);
         if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
             send_err = send_report(report);
             if (send_err == ESP_OK) {
@@ -249,6 +250,7 @@ bool WaterTankApp::run(bool enter_sleep)
         }
     }
     if (send_err != ESP_OK) {
+        led_controller_.set_pattern(BlinkPattern::ERROR_BURST);
         ESP_LOGE(TAG, "Failed to send report: %s", esp_err_to_name(send_err));
     }
 
