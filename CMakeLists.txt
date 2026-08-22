@@ -8,6 +8,15 @@ if(NOT DEFINED SDKCONFIG_DEFAULTS)
     set(SDKCONFIG_DEFAULTS "sdkconfig.defaults;sdkconfig.defaults.esp32c3;sdkconfig.defaults.dev")
 endif()
 
+# Fallback to secrets.example.hpp if secrets.hpp does not exist (e.g. on CI or fresh clone)
+if(NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/main/include/secrets.hpp")
+    if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/main/include/secrets.example.hpp")
+        message(STATUS "secrets.hpp not found, creating from secrets.example.hpp")
+        configure_file("${CMAKE_CURRENT_LIST_DIR}/main/include/secrets.example.hpp"
+                       "${CMAKE_CURRENT_LIST_DIR}/main/include/secrets.hpp" COPYONLY)
+    endif()
+endif()
+
 # Add paths for components (submodules and shared components)
 list(APPEND EXTRA_COMPONENT_DIRS
     "${CMAKE_CURRENT_LIST_DIR}/components/smart-farm-common"

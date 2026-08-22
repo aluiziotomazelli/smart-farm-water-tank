@@ -18,6 +18,8 @@
 #include "interfaces/i_ota_manager.hpp"
 #include "interfaces/i_hal_system.hpp"
 #include "interfaces/i_time_manager.hpp"
+#include "interfaces/i_led_controller.hpp"
+#include "led_controller_types.hpp"
 
 #include "water_tank_logic.hpp"
 #include "water_tank_stats.hpp"
@@ -48,7 +50,8 @@ public:
         IOtaTrigger& btn_trigger,
         IOtaTrigger& espnow_trigger,
         idf_hals::ISystemHAL& system_hal,
-        time_manager::ITimeManager& time_manager);
+        time_manager::ITimeManager& time_manager,
+        ILedController& led_controller);
 
     /**
      * @brief Initialize application state, dependencies and check OTA status.
@@ -84,15 +87,15 @@ private:
     IOtaTrigger& espnow_trigger_;
     idf_hals::ISystemHAL& system_hal_;
     time_manager::ITimeManager& time_manager_;
+    ILedController& led_controller_;
 
     std::atomic<bool> ota_triggered_{false};
 
 protected:
     WaterTankStats stats_;
-    CoreStorage core_;
+    CoreData core_;
 
     bool session_healthy_ = true;
-    bool pending_firmware_verify_ = false;
     bool pending_core_commit_ = false;
     bool pending_tank_commit_ = false;
 
@@ -104,18 +107,15 @@ protected:
     esp_err_t send_report(const farm::WaterLevelReport& report);
 
     void retry_reading_if_needed(ultrasonic::Reading& reading);
-    farm::SensorStatus map_status(ultrasonic::UsResult result) const;
     bool wait_for_comm_ready(uint32_t timeout_ms);
     void wait_for_pairing(uint32_t timeout_ms);
     uint64_t listen_for_messages(uint32_t timeout_ms);
     void process_pending_ota();
     void enter_deep_sleep(uint64_t sleep_time_us);
     void save_persistent_state();
-    esp_err_t disconnect_stop_wifi();
     void process_command(const espnow::AppMessage& msg, uint64_t& out_override_sleep_us);
     void send_cmd_ack(const espnow::AppMessage& msg, espnow::AckStatus status);
     esp_err_t send_ota_report(farm::OtaExecResult result, farm::OtaErrorCode error_code = farm::OtaErrorCode::NONE);
-    farm::OtaErrorCode map_ota_fail_reason(OtaFailReason reason) const;
     void report_ota_failure_and_restore_comm(farm::OtaErrorCode err_code, bool connected_by_us);
 
     esp_err_t init_wifi();
@@ -126,6 +126,6 @@ protected:
     void sync_time_from_espnow_packet(const farm::TimeSyncCommand& cmd);
 
     esp_err_t init_tank_storage();
-    void check_firmware();
-    esp_err_t connect_wifi_with_retry(uint8_t max_attempts = 2);
+    void update_running_version();
+    void check_firmware_healthy();
 };

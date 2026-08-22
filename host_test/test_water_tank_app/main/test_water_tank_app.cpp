@@ -4,21 +4,22 @@
 #include "water_tank_app.hpp"
 #include "espnow_ota_trigger.hpp"
 #include "mock_i_level_sensor.hpp"
-#include "mock_i_float_switch.hpp"
+#include "mock_float_switch.hpp"
 #include "mock_i_water_tank_storage.hpp"
-#include "mock_i_espnow_manager.hpp"
+#include "mock_espnow_manager.hpp"
 #include "mock_i_wifi_manager.hpp"
 #include "mock_i_power_control.hpp"
 #include "mock_hal_sleep.hpp"
 #include "mock_i_battery_monitor.hpp"
 #include "tank_geometry.hpp"
 #include "mock_hal_timer.hpp"
-#include "mock_i_ota_manager.hpp"
+#include "mock_ota_manager.hpp"
 #include "mock_hal_freertos.hpp"
 #include "mock_i_ota_trigger.hpp"
 #include "mock_hal_system.hpp"
 #include "mock_nvs_core.hpp"
-#include "mock_i_time_manager.hpp"
+#include "mock_time_manager.hpp"
+#include "mock_led_controller.hpp"
 
 using ::testing::_;
 using ::testing::AnyNumber;
@@ -37,18 +38,16 @@ class TestableWaterTankApp : public WaterTankApp
 public:
     using WaterTankApp::WaterTankApp;
 
-    const CoreStorage& get_core_data() const { return core_; }
+    const CoreData& get_core_data() const { return core_; }
     const WaterTankStats& get_stats() const { return stats_; }
     bool is_session_healthy() const { return session_healthy_; }
-    bool is_pending_firmware_verify() const { return pending_firmware_verify_; }
     bool is_pending_core_commit() const { return pending_core_commit_; }
 
     void set_session_healthy(bool healthy) { session_healthy_ = healthy; }
-    void set_pending_firmware_verify(bool pending) { pending_firmware_verify_ = pending; }
 
     bool call_wait_for_comm_ready(uint32_t timeout_ms) { return wait_for_comm_ready(timeout_ms); }
     void call_process_pending_ota() { process_pending_ota(); }
-    void call_check_firmware() { check_firmware(); }
+    void call_check_firmware_healthy() { check_firmware_healthy(); }
 };
 
 /**
@@ -73,7 +72,8 @@ protected:
     NiceMock<MockOtaTrigger> mock_espnow_trigger;
     NiceMock<idf_hals::MockSystemHAL> mock_system_hal;
     NiceMock<wifi_manager::MockWiFiManager> mock_wifi;
-    NiceMock<MockTimeManager> mock_time_manager;
+    NiceMock<time_manager::MockTimeManager> mock_time_manager;
+    NiceMock<MockLedController> mock_led_controller;
 
     TankGeometry geometry{10}; // offset 10cm (uint8_t)
     WaterTankLogic logic{geometry, mock_float_switch};
@@ -90,8 +90,9 @@ protected:
         default_reading.cm = 50.0f;
         ON_CALL(mock_sensor, read_level(_)).WillByDefault(Return(default_reading));
 
-        ON_CALL(mock_core_storage, load_core(_)).WillByDefault(Return(ESP_OK));
+        ON_CALL(mock_core_storage, init(_, _)).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_core_storage, save_core(_, _)).WillByDefault(Return(ESP_OK));
+        ON_CALL(mock_tank_storage, init_app_data(_, _)).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_tank_storage, load_app_data(_)).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_tank_storage, save_app_data(_, _)).WillByDefault(Return(ESP_OK));
 
@@ -150,7 +151,8 @@ protected:
             mock_btn_trigger,
             espnow_trig,
             mock_system_hal,
-            mock_time_manager);
+            mock_time_manager,
+            mock_led_controller);
         if (auto_init) {
             app->init(false);
         }
@@ -167,8 +169,8 @@ protected:
 TEST_F(WaterTankAppTest, Init_Success_ConfiguresDependencies)
 {
     // 1. Storage is loaded during init
-    EXPECT_CALL(mock_core_storage, load_core(_)).Times(1);
-    EXPECT_CALL(mock_tank_storage, load_app_data(_)).Times(1);
+    EXPECT_CALL(mock_core_storage, init(_, _)).Times(1);
+    EXPECT_CALL(mock_tank_storage, init_app_data(_, _)).Times(1);
 
     // 2. OTA Manager is initialized
     EXPECT_CALL(mock_ota, init(_)).Times(1);
@@ -207,8 +209,7 @@ TEST_F(WaterTankAppTest, Init_FloatSwitchFail_SetsUnhealthySessionAndReturnsErro
 
 TEST_F(WaterTankAppTest, Init_CoreStorageFail_SetsUnhealthySessionAndReturnsError)
 {
-    ON_CALL(mock_core_storage, load_core(_)).WillByDefault(Return(ESP_FAIL));
-    ON_CALL(mock_core_storage, create_default_storage(_, _)).WillByDefault(Return(ESP_FAIL));
+    ON_CALL(mock_core_storage, init(_, _)).WillByDefault(Return(ESP_FAIL));
 
     esp_err_t ret = sut->init(false);
 
@@ -218,8 +219,7 @@ TEST_F(WaterTankAppTest, Init_CoreStorageFail_SetsUnhealthySessionAndReturnsErro
 
 TEST_F(WaterTankAppTest, Init_TankStorageFail_SetsUnhealthySessionAndReturnsError)
 {
-    ON_CALL(mock_tank_storage, load_app_data(_)).WillByDefault(Return(ESP_FAIL));
-    ON_CALL(mock_tank_storage, save_app_data(_, _)).WillByDefault(Return(ESP_FAIL));
+    ON_CALL(mock_tank_storage, init_app_data(_, _)).WillByDefault(Return(ESP_FAIL));
 
     esp_err_t ret = sut->init(false);
 
@@ -267,13 +267,8 @@ TEST_F(WaterTankAppTest, Init_SensorFail_SetsUnhealthySessionAndReturnsError)
 //  Verify behavior when NVS load fails on first boot (it should load defaults)
 TEST_F(WaterTankAppTest, Init_HandlesFirstBoot_CreatesDefaultStorage)
 {
-    // Storage load returns errors
-    ON_CALL(mock_core_storage, load_core(_)).WillByDefault(Return(ESP_FAIL));
-    ON_CALL(mock_tank_storage, load_app_data(_)).WillByDefault(Return(ESP_FAIL));
-
-    // Storage init will create default storage and save
-    EXPECT_CALL(mock_core_storage, create_default_storage(_, _)).WillOnce(Return(ESP_OK));
-    EXPECT_CALL(mock_tank_storage, save_app_data(_, _)).Times(1);
+    EXPECT_CALL(mock_core_storage, init(_, _)).WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_tank_storage, init_app_data(_, _)).WillOnce(Return(ESP_OK));
 
     // Act
     esp_err_t ret = sut->init(false);
@@ -288,7 +283,7 @@ TEST_F(WaterTankAppTest, Init_WakeupByTimer_SetsNormalReadingMode)
     EXPECT_CALL(mock_sleep, get_wakeup_cause()).WillOnce(Return(ESP_SLEEP_WAKEUP_TIMER));
 
     EXPECT_CALL(mock_core_storage, process_boot_reasons(_, ESP_RST_DEEPSLEEP, ESP_SLEEP_WAKEUP_TIMER, _))
-        .WillOnce(testing::Invoke([](CoreStorage& core, esp_reset_reason_t, esp_sleep_wakeup_cause_t, bool&) {
+        .WillOnce(testing::Invoke([](CoreData& core, esp_reset_reason_t, esp_sleep_wakeup_cause_t, bool&) {
             core.last_wake = WakeSource::TIMER;
         }));
 
@@ -306,7 +301,7 @@ TEST_F(WaterTankAppTest, Init_WakeupByGpio_SetsFloatSwitchTriggeredMode)
     EXPECT_CALL(mock_sleep, get_wakeup_cause()).WillOnce(Return(ESP_SLEEP_WAKEUP_GPIO));
 
     EXPECT_CALL(mock_core_storage, process_boot_reasons(_, ESP_RST_DEEPSLEEP, ESP_SLEEP_WAKEUP_GPIO, _))
-        .WillOnce(testing::Invoke([](CoreStorage& core, esp_reset_reason_t, esp_sleep_wakeup_cause_t, bool&) {
+        .WillOnce(testing::Invoke([](CoreData& core, esp_reset_reason_t, esp_sleep_wakeup_cause_t, bool&) {
             core.last_wake = WakeSource::GPIO;
         }));
 
@@ -320,8 +315,7 @@ TEST_F(WaterTankAppTest, Init_WakeupByGpio_SetsFloatSwitchTriggeredMode)
 
 TEST_F(WaterTankAppTest, Init_ResetReasonPanic_IncrementsCrashAndBootCount)
 {
-    // Arrange: Mock load_core to populate initial state
-    EXPECT_CALL(mock_core_storage, load_core(_)).WillOnce(testing::Invoke([](CoreStorage& core) {
+    EXPECT_CALL(mock_core_storage, init(_, _)).WillOnce(testing::Invoke([](CoreData& core, const CoreData&) {
         core.boot_count = 5;
         core.crash_count = 2;
         return ESP_OK;
@@ -331,7 +325,8 @@ TEST_F(WaterTankAppTest, Init_ResetReasonPanic_IncrementsCrashAndBootCount)
 
     EXPECT_CALL(mock_core_storage, process_boot_reasons(_, ESP_RST_PANIC, _, _))
         .WillOnce(
-            testing::Invoke([](CoreStorage& core, esp_reset_reason_t, esp_sleep_wakeup_cause_t, bool& pending_commit) {
+            testing::Invoke([](CoreData& core, esp_reset_reason_t, esp_sleep_wakeup_cause_t, bool& pending_commit) {
+                core.boot_count++;
                 core.crash_count++;
                 core.last_wake = WakeSource::CRASH;
                 pending_commit = true;
@@ -350,11 +345,11 @@ TEST_F(WaterTankAppTest, Init_ResetReasonPanic_IncrementsCrashAndBootCount)
 
 TEST_F(WaterTankAppTest, Init_NormalBoot_IncrementsCyclesSinceNvsCommit)
 {
-    // Arrange: Mock load_app_data to populate initial cycles count
-    EXPECT_CALL(mock_tank_storage, load_app_data(_)).WillOnce(testing::Invoke([](WaterTankStats& stats) {
-        stats.cycles_since_nvs_commit = 3;
-        return ESP_OK;
-    }));
+    EXPECT_CALL(mock_tank_storage, init_app_data(_, _))
+        .WillOnce(testing::Invoke([](WaterTankStats& stats, const WaterTankStats&) {
+            stats.cycles_since_nvs_commit = 3;
+            return ESP_OK;
+        }));
 
     // Act
     esp_err_t ret = sut->init(false);
@@ -369,14 +364,10 @@ TEST_F(WaterTankAppTest, Init_WithLogging_ConfiguresFixedChannelPolicyAndRetries
     // Arrange: Mock ESP-NOW channel policy set call (called once when logging is enabled)
     EXPECT_CALL(mock_comm, set_channel_policy(espnow::ChannelPolicy::FIXED)).Times(1);
 
-    // Mock initial state as not connected so connect_wifi_with_retry executes loop
+    // Mock initial state as not connected so connect executes
     EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::STARTED));
 
-    // Mock first connect attempt fails, second succeeds
-    InSequence seq;
-    EXPECT_CALL(mock_wifi, connect(_)).WillOnce(Return(ESP_FAIL));
-    EXPECT_CALL(mock_wifi, disconnect(_)).WillOnce(Return(ESP_OK));
-    EXPECT_CALL(mock_wifi, connect(_)).WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_wifi, connect(_, _, _)).WillOnce(Return(ESP_OK));
 
     // Act
     esp_err_t ret = sut->init(true);
@@ -468,9 +459,9 @@ TEST_F(WaterTankAppTest, Run_WhenRecoveryScan_WaitsCommReadyAndRetriesReportSend
 
 // --- OTA Management ---
 
-TEST_F(WaterTankAppTest, Init_PendingFirmwareVerify_MarksPartitionValid_WhenSessionHealthy)
+TEST_F(WaterTankAppTest, Run_PendingFirmwareVerify_MarksPartitionValid_WhenSessionHealthy)
 {
-    // Arrange: Mock pending OTA verification state
+    // Arrange: Mock pending OTA verification state in run()
     EXPECT_CALL(mock_ota, check_pending_verify()).WillOnce(Return(true));
     EXPECT_CALL(mock_ota, confirm_app_valid()).WillOnce(Return(true));
     EXPECT_CALL(mock_comm, get_node_state()).WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
@@ -479,7 +470,6 @@ TEST_F(WaterTankAppTest, Init_PendingFirmwareVerify_MarksPartitionValid_WhenSess
     // Act: init and run
     esp_err_t ret = sut->init(false);
     EXPECT_EQ(ret, ESP_OK);
-    EXPECT_TRUE(sut->is_pending_firmware_verify());
 
     sut->run(true);
 }
@@ -567,6 +557,8 @@ TEST_F(WaterTankAppTest, Run_ReadsBattery_UpdatesStatsAndDeinits)
 
     battery_monitor::BatteryReading bat_reading{};
     bat_reading.voltage_mv = 3800;
+    bat_reading.percent = 85;
+    bat_reading.state = battery_monitor::BatteryState::NORMAL;
 
     EXPECT_CALL(mock_battery, init()).WillOnce(Return(ESP_OK));
     EXPECT_CALL(mock_battery, read(_)).WillOnce(DoAll(SetArgReferee<0>(bat_reading), Return(ESP_OK)));
@@ -575,6 +567,8 @@ TEST_F(WaterTankAppTest, Run_ReadsBattery_UpdatesStatsAndDeinits)
     sut->run(true);
 
     EXPECT_EQ(sut->get_stats().last_battery_mv, 3800);
+    EXPECT_EQ(sut->get_stats().last_battery_percent, 85);
+    EXPECT_EQ(sut->get_stats().last_battery_state, farm::BatteryState::NORMAL);
 }
 
 TEST_F(WaterTankAppTest, Run_SendsFloatSwitchFullFlagInReport)
@@ -685,8 +679,7 @@ TEST_F(WaterTankAppTest, Run_ProcessesCommandsWithAckRequired_SendsConfirmRecept
             return pdPASS;
         }));
 
-    EXPECT_CALL(mock_comm, confirm_reception(msg.sender_id, 42, espnow::AckStatus::OK))
-        .WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_comm, confirm_reception(msg.sender_id, 42, espnow::AckStatus::OK)).WillOnce(Return(ESP_OK));
 
     EXPECT_CALL(mock_sleep, enable_timer_wakeup(60000000ULL)).WillOnce(Return(ESP_OK));
 
@@ -695,10 +688,11 @@ TEST_F(WaterTankAppTest, Run_ProcessesCommandsWithAckRequired_SendsConfirmRecept
 
 TEST_F(WaterTankAppTest, Run_PeriodicNvsCommit_ForcesCommitWhenIntervalReached)
 {
-    EXPECT_CALL(mock_tank_storage, load_app_data(_)).WillOnce(Invoke([](WaterTankStats& stats) {
-        stats.cycles_since_nvs_commit = 10;
-        return ESP_OK;
-    }));
+    EXPECT_CALL(mock_tank_storage, init_app_data(_, _))
+        .WillOnce(Invoke([](WaterTankStats& stats, const WaterTankStats&) {
+            stats.cycles_since_nvs_commit = 10;
+            return ESP_OK;
+        }));
 
     sut->init(false);
 
@@ -757,12 +751,12 @@ TEST_F(WaterTankAppTest, WaitForCommReady_WaitsAndReturnsFalseIfTimeout)
 TEST_F(WaterTankAppTest, ProcessPendingOta_ConnectsWifiAndRollbacksOnFail)
 {
     EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::INITIALIZED));
-    EXPECT_CALL(mock_wifi, connect(_)).WillRepeatedly(Return(ESP_FAIL));
+    EXPECT_CALL(mock_wifi, connect(_, _, _)).WillRepeatedly(Return(ESP_FAIL));
 
     EXPECT_CALL(mock_comm, deinit()).Times(1);
 
     EXPECT_CALL(mock_comm, init(_)).WillOnce(Return(ESP_OK));
-    EXPECT_CALL(mock_comm, set_channel_policy(espnow::ChannelPolicy::FIXED)).Times(1);
+    EXPECT_CALL(mock_comm, set_channel_policy(espnow::ChannelPolicy::SCAN)).Times(1);
     EXPECT_CALL(mock_comm, get_node_state()).WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
     EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).WillOnce(Return(ESP_OK));
 
@@ -790,25 +784,28 @@ TEST_F(WaterTankAppTest, ProcessPendingOta_FailsOnWatchdogTimeoutAndLogs)
     sut->call_process_pending_ota();
 }
 
-TEST_F(WaterTankAppTest, CheckFirmware_PopulatesCoreVersionOnSuccess)
+TEST_F(WaterTankAppTest, CheckFirmwareHealthy_ConfirmsAppAndSendsReportOnSuccess)
 {
-    sut->set_pending_firmware_verify(true);
     sut->set_session_healthy(true);
 
     EXPECT_CALL(mock_ota, confirm_app_valid()).WillOnce(Return(true));
 
-    OtaVersion mock_desc{1, 2, 3};
-    EXPECT_CALL(mock_ota, get_running_version()).WillRepeatedly(Return(mock_desc));
-
     EXPECT_CALL(mock_comm, get_node_state()).WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
     EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).WillOnce(Return(ESP_OK));
 
-    sut->call_check_firmware();
+    sut->call_check_firmware_healthy();
+}
 
-    EXPECT_FALSE(sut->is_pending_firmware_verify());
+TEST_F(WaterTankAppTest, UpdateRunningVersion_PopulatesCoreVersion)
+{
+    OtaVersion mock_desc{1, 2, 3};
+    EXPECT_CALL(mock_ota, get_running_version()).WillRepeatedly(Return(mock_desc));
+
+    sut->init(false);
+
     EXPECT_TRUE(sut->is_pending_core_commit());
 
-    const CoreStorage& core = sut->get_core_data();
+    const CoreData& core = sut->get_core_data();
     EXPECT_EQ(core.fw_major, 1);
     EXPECT_EQ(core.fw_minor, 2);
     EXPECT_EQ(core.fw_patch, 3);
@@ -859,12 +856,13 @@ TEST_F(WaterTankAppTest, Run_UnsynchronizedTime_DoesNotSendActiveTimeSyncRequest
 
     bool time_sync_requested = false;
     EXPECT_CALL(mock_comm, send_data(_, _, _, _, _))
-        .WillRepeatedly(Invoke([&time_sync_requested](uint8_t dest, uint8_t type, const void* data, size_t len, bool ack) {
-            if (type == static_cast<uint8_t>(farm::PayloadType::REQUEST_TIME_SYNC)) {
-                time_sync_requested = true;
-            }
-            return ESP_OK;
-        }));
+        .WillRepeatedly(
+            Invoke([&time_sync_requested](uint8_t dest, uint8_t type, const void* data, size_t len, bool ack) {
+                if (type == static_cast<uint8_t>(farm::PayloadType::REQUEST_TIME_SYNC)) {
+                    time_sync_requested = true;
+                }
+                return ESP_OK;
+            }));
 
     sut->run(true);
 
@@ -898,11 +896,13 @@ TEST_F(WaterTankAppTest, Run_ProcessesMultipleCommandsInListenWindow)
         .WillRepeatedly(Invoke([sync_msg, sleep_msg, &call_count](QueueHandle_t, void* data, TickType_t) {
             call_count++;
             if (call_count == 1) {
-                if (data) *static_cast<espnow::AppMessage*>(data) = sync_msg;
+                if (data)
+                    *static_cast<espnow::AppMessage*>(data) = sync_msg;
                 return pdPASS;
             }
             if (call_count == 2) {
-                if (data) *static_cast<espnow::AppMessage*>(data) = sleep_msg;
+                if (data)
+                    *static_cast<espnow::AppMessage*>(data) = sleep_msg;
                 return pdPASS;
             }
             return pdFAIL;
@@ -954,3 +954,65 @@ TEST_F(WaterTankAppTest, Run_HighVarianceSensorResult_RetriesWith1_8xSamples)
     EXPECT_GT(sut->get_stats().level_permille, 0);
 }
 
+// ==============================================================================
+// LED Status Indicator Tests
+// ==============================================================================
+
+TEST_F(WaterTankAppTest, Init_Success_SetsBootSuccessPattern)
+{
+    EXPECT_CALL(mock_led_controller, init()).WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_led_controller, start()).WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_led_controller, set_pattern(BlinkPattern::BOOT_SUCCESS)).Times(1);
+
+    EXPECT_EQ(sut->init(false), ESP_OK);
+}
+
+TEST_F(WaterTankAppTest, Init_Failure_SetsErrorBurstPattern)
+{
+    ON_CALL(mock_core_storage, init(_, _)).WillByDefault(Return(ESP_FAIL));
+
+    EXPECT_CALL(mock_led_controller, set_pattern(BlinkPattern::ERROR_BURST)).Times(1);
+
+    EXPECT_EQ(sut->init(false), ESP_FAIL);
+}
+
+TEST_F(WaterTankAppTest, Run_SendsReport_PulsesLed)
+{
+    sut->init(false);
+
+    EXPECT_CALL(mock_led_controller, set_pattern(BlinkPattern::TX_PULSE)).Times(::testing::AtLeast(1));
+
+    sut->run(true);
+}
+
+TEST_F(WaterTankAppTest, Run_EntersDeepSleep_StopsLed)
+{
+    sut->init(false);
+
+    EXPECT_CALL(mock_led_controller, stop()).Times(1);
+
+    sut->run(true);
+}
+
+TEST_F(WaterTankAppTest, OnOtaTriggered_SetsOtaUpdatingPattern)
+{
+    EXPECT_CALL(mock_led_controller, set_pattern(BlinkPattern::OTA_UPDATING)).Times(1);
+
+    sut->on_ota_triggered(OtaTriggerSource::BUTTON);
+}
+
+TEST_F(WaterTankAppTest, Run_PairingNodeState_SetsPairingPatternAndClearsWhenOperational)
+{
+    EXPECT_CALL(mock_comm, get_node_state())
+        .WillOnce(Return(espnow::NodeState::PAIRING))
+        .WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
+
+    EXPECT_CALL(mock_comm, add_peer(espnow::ReservedIds::HUB, _, espnow::ReservedTypes::HUB, 0))
+        .WillOnce(Return(ESP_OK));
+
+    EXPECT_CALL(mock_led_controller, set_pattern(BlinkPattern::PAIRING_MODE)).Times(1);
+    EXPECT_CALL(mock_led_controller, set_pattern(BlinkPattern::OFF)).Times(1);
+    EXPECT_CALL(mock_led_controller, set_pattern(BlinkPattern::TX_PULSE)).Times(::testing::AtLeast(1));
+
+    sut->run(true);
+}

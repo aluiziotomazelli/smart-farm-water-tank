@@ -2,7 +2,6 @@ idf_component_register(
     SRCS
         "main.cpp"
         "src/water_tank_app.cpp"
-        "src/water_tank_nvs.cpp"
         "src/water_tank_logic.cpp"
         "src/tank_geometry.cpp"
     INCLUDE_DIRS

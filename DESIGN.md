@@ -8,7 +8,35 @@ The **Water Tank Node** is a battery-powered, deep-sleep edge node within the Sm
 
 ## 2. System Architecture & Lifecycle
 
-*(Architecture overview and lifecycle components to be documented in future updates)*
+The node implements a deterministic **run-to-completion** operational model designed to minimize active MCU runtime:
+
+```
+[Reset / Wakeup] ──► [Init (LED, Storage, WiFi, ESP-NOW, Sensors)]
+                           │
+                           ▼
+                    [Sensor Rail ON] ──► [Aux Read (Battery, FloatSwitch)]
+                           │
+                           ▼
+                    [Ultrasonic Multi-Sample] ──► [Sensor Rail OFF]
+                           │
+                           ▼
+                    [Edge Logic & Fill State Confirmation]
+                           │
+                           ▼
+                    [ESP-NOW WaterLevelReport Transmission (LED TX Pulse)]
+                           │
+                           ▼
+                    [Listen Window (200 ms for Hub Commands)]
+                           │
+                           ▼
+                    [Save State & Stop LED Controller]
+                           │
+                           ▼
+                    [Enter Deep Sleep (Timer + FloatSwitch Wakeup)]
+```
+
+### 2.1 Dependency Injection & HAL Decoupling
+All hardware-specific APIs (GPIO, ADC, Sleep, Timers, FreeRTOS, NVS, Wi-Fi, System) are abstracted through pure virtual interfaces (`idf_hals` and `smart-farm-common`). The core application orchestrator (`WaterTankApp`) and domain logic (`WaterTankLogic`, `TankGeometry`) have zero direct dependencies on ESP-IDF hardware drivers, enabling comprehensive unit testing on host Linux.
 
 ---
 
@@ -78,16 +106,37 @@ The **Water Tank Node** is a battery-powered, deep-sleep edge node within the Sm
 
 ## 4. State Management & Storage
 
-*(Storage architecture, NVS, and RTC caching details to be populated)*
+### 4.1 Storage Architecture
+The node utilizes the `AppStorage<T, Magic, Version>` template pattern (`smart-farm-common`) with `StorageEnvelope`:
+- **RTC Memory / RAM Caching**: Runtime state resides in memory and persists across deep sleep wakeups.
+- **NVS Flash Throttling**: To maximize Flash endurance, commits to non-volatile storage are throttled to every `NVS_COMMIT_INTERVAL = 10` cycles (~50 minutes in normal operation) unless forced by critical events (e.g. firmware confirmation, time sync, reboot command).
+- **Integrity Validation**: CRC32 checksums, magic words (`0x57544E56` for tank stats, `0x434F5245` for core), and schema versioning prevent corrupted reads.
 
 ---
 
 ## 5. Power & Deep Sleep Management
 
-*(Power profiles, GPIO wakeup, and backup mode logic to be populated)*
+### 5.1 Power Gating
+- The ultrasonic sensor is powered via a high-side P-MOSFET gate on `GPIO 10`. Power is asserted at the start of `run()` and deactivated immediately after valid sampling, reducing sensor standby draw from ~15 mA to 0 µA during sleep.
+
+### 5.2 Dynamic Sleep Interval Calculation
+`WaterTankLogic::calculate_sleep_time_us()` determines deep sleep duration according to operational dynamics:
+- **Filling / Draining Trend**: Accelerated sampling (~60s) to closely track rapid volume changes.
+- **Stable Reservoir**: Extended sampling (300s / 5 min) for battery conservation.
+- **Critical Battery / Error State**: Fallback backoff interval to prevent brownout loops.
+
+### 5.3 Float Switch GPIO Wakeup
+When the reservoir is empty or falling, `FloatSwitch::should_enable_wakeup()` enables the ESP32-C3 deep sleep GPIO wakeup on `GPIO 2`. A rising water level triggering the float switch immediately wakes the MCU without waiting for timer expiry.
 
 ---
 
 ## 6. Over-The-Air (OTA) Updates
 
-*(OTA triggers, manifest parsing, and rollback mechanism to be populated)*
+### 6.1 Trigger Mechanisms
+- **Hardware Trigger**: Long press of the BOOT button (`GPIO 9`) captured by `ButtonOtaTrigger`.
+- **ESP-NOW Network Trigger**: Remote command (`farm::CommandType::START_OTA`) captured by `EspNowOtaTrigger`.
+
+### 6.2 Execution & Rollback Protection
+1. **Radio Handover**: ESP-NOW is stopped and Wi-Fi connects to the local AP using stored credentials.
+2. **Download & Flash**: `OtaController` fetches the manifest and streams the firmware binary to the next OTA partition.
+3. **Post-Boot Health Check**: Upon rebooting into the new image, `WaterTankApp::check_firmware_healthy()` verifies all peripheral inits. If healthy, the partition is confirmed (`esp_ota_mark_app_valid_cancel_rollback()`). If any init fails, the partition is rejected and the bootloader automatically rolls back to the previous stable firmware slot.

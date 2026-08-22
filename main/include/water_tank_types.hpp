@@ -16,14 +16,6 @@ static constexpr float SENSOR_MIN_DISTANCE_CM = 21.0f;  ///< Minimum distance fo
 static constexpr float SENSOR_MAX_DISTANCE_CM = 178.0f; ///< Maximum distance for sensor valid measure (cm)
 
 // =============================================================================
-// Battery Voltage Thresholds (millivolts)
-// =============================================================================
-static constexpr uint16_t BATTERY_EMPTY_MV = 3000;    ///< Voltage threshold representing 0% battery (millivolts)
-static constexpr uint16_t BATTERY_FULL_MV = 4200;     ///< Voltage threshold representing 100% battery (millivolts)
-static constexpr uint16_t BATTERY_LOW_MV = 3400;      ///< Voltage threshold representing low battery level (millivolts)
-static constexpr uint16_t BATTERY_CRITICAL_MV = 3200; ///< Voltage representing critical battery level (millivolts)
-
-// =============================================================================
 // Water Tank Logic & Timer Settings
 // =============================================================================
 static constexpr uint16_t LEVEL_DELTA_MIN = 5; ///< Minimum level change to detect (5 permille)
