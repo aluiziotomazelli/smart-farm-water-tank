@@ -22,9 +22,14 @@ static constexpr uint16_t LEVEL_DELTA_MIN = 5; ///< Minimum level change to dete
 static constexpr uint8_t FILL_STATE_CONFIRMATIONS_REQUIRED = 2; ///< Consecutive samples needed to confirm FillState transition
 
 static constexpr uint64_t TIMER_FILLING_US = 60ULL * 1000000ULL;       ///< Time to sleep when tank is filling (60 s)
-static constexpr uint64_t TIMER_STABLE_US = 5ULL * 60ULL * 1000000ULL; ///< Time to sleep when tank is stable (5 min)
+static constexpr uint64_t TIMER_STABLE_US = 5ULL * 60ULL * 1000000ULL; ///< Time to sleep when tank is stable during day (5 min)
+static constexpr uint64_t TIMER_STABLE_NIGHT_US =
+    15ULL * 60ULL * 1000000ULL;                                        ///< Time to sleep when tank is stable during night (15 min)
 static constexpr uint64_t TIMER_DRAIN_US = 2ULL * 60ULL * 1000000ULL;  ///< Time to sleep when tank is draining (2 min)
 static constexpr uint64_t TIMER_UNKNOWN_US = 60ULL * 1000000ULL; ///< Time to sleep when tank state is unknown (60 s)
+
+static constexpr uint8_t NIGHT_START_HOUR = 22; ///< Start hour for night sleep schedule (22:00)
+static constexpr uint8_t NIGHT_END_HOUR = 6;    ///< End hour for night sleep schedule (06:00)
 
 static constexpr float WEAK_SLEEP_FACTOR = 0.5f;     ///< Factor to reduce sleep time when sensor reading is weak
 static constexpr float INVALID_SLEEP_FACTOR = 0.25f; ///< Factor to reduce sleep time when sensor reading is invalid

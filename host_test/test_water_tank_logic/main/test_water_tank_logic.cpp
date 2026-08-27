@@ -104,10 +104,39 @@ TEST_F(WaterTankLogicTest, SleepTimeInBackupModeDependsOnFloatSwitch)
 
     // Tank NOT full according to float switch
     EXPECT_CALL(mock_fs, is_tank_full()).WillOnce(Return(false));
-    EXPECT_EQ(logic.calculate_sleep_time_us(stats), BACKUP_MODE_SLEEP_US); // 15s (BACKUP_MODE_SLEEP_US)
+    EXPECT_EQ(logic.calculate_sleep_time_us(stats, false), BACKUP_MODE_SLEEP_US); // 15s
 
-    // Tank IS full
+    // Tank IS full during day
     EXPECT_CALL(mock_fs, is_tank_full()).WillOnce(Return(true));
-    EXPECT_EQ(logic.calculate_sleep_time_us(stats), TIMER_STABLE_US); // 5min (TIMER_STABLE_US)
+    EXPECT_EQ(logic.calculate_sleep_time_us(stats, false), TIMER_STABLE_US); // 5 min
+
+    // Tank IS full during night
+    EXPECT_CALL(mock_fs, is_tank_full()).WillOnce(Return(true));
+    EXPECT_EQ(logic.calculate_sleep_time_us(stats, true), TIMER_STABLE_NIGHT_US); // 15 min
+}
+
+TEST_F(WaterTankLogicTest, SleepTime_StableState_DayVsNight)
+{
+    stats.last_result = ultrasonic::UsResult::OK;
+    stats.fill_state = FillState::STABLE;
+
+    // Daytime: 5 minutes
+    EXPECT_EQ(logic.calculate_sleep_time_us(stats, false), TIMER_STABLE_US);
+
+    // Nighttime: 15 minutes
+    EXPECT_EQ(logic.calculate_sleep_time_us(stats, true), TIMER_STABLE_NIGHT_US);
+}
+
+TEST_F(WaterTankLogicTest, SleepTime_DrainingAndFilling_OverrideNightSchedule)
+{
+    stats.last_result = ultrasonic::UsResult::OK;
+
+    // Draining at night still uses 2 minutes
+    stats.fill_state = FillState::DRAINING;
+    EXPECT_EQ(logic.calculate_sleep_time_us(stats, true), TIMER_DRAIN_US);
+
+    // Filling at night still uses 1 minute
+    stats.fill_state = FillState::FILLING;
+    EXPECT_EQ(logic.calculate_sleep_time_us(stats, true), TIMER_FILLING_US);
 }
 

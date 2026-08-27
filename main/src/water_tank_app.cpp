@@ -280,8 +280,17 @@ bool WaterTankApp::run(bool enter_sleep)
     }
 
     // 9. Calculate sleep time & determine GPIO wakeup status
+    bool is_night = false;
+    if (time_manager_.is_synchronized()) {
+        time_t sec = time_manager_.get_timestamp_sec();
+        struct tm tm_info;
+        if (localtime_r(&sec, &tm_info) != nullptr) {
+            is_night = (tm_info.tm_hour >= NIGHT_START_HOUR || tm_info.tm_hour < NIGHT_END_HOUR);
+        }
+    }
+
     uint64_t sleep_time_us =
-        (cmd_res.override_sleep_us > 0) ? cmd_res.override_sleep_us : logic_.calculate_sleep_time_us(stats_);
+        (cmd_res.override_sleep_us > 0) ? cmd_res.override_sleep_us : logic_.calculate_sleep_time_us(stats_, is_night);
     stats_.gpio_wakeup_enabled = float_switch_.should_enable_wakeup();
 
     // 10. Save updated state (Core & Tank Storage)

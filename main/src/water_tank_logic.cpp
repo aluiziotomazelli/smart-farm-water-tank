@@ -45,14 +45,14 @@ void WaterTankLogic::update_operation_mode(WaterTankStats& stats) const
     }
 }
 
-uint64_t WaterTankLogic::calculate_sleep_time_us(const WaterTankStats& stats) const
+uint64_t WaterTankLogic::calculate_sleep_time_us(const WaterTankStats& stats, bool is_night) const
 {
     if (stats.backup_mode_active) {
         if (!float_switch_.is_tank_full()) {
             return BACKUP_MODE_SLEEP_US;
         }
         else {
-            return TIMER_STABLE_US;
+            return is_night ? TIMER_STABLE_NIGHT_US : TIMER_STABLE_US;
         }
     }
 
@@ -66,7 +66,7 @@ uint64_t WaterTankLogic::calculate_sleep_time_us(const WaterTankStats& stats) co
             timer_us = TIMER_DRAIN_US;
             break;
         case FillState::STABLE:
-            timer_us = TIMER_STABLE_US;
+            timer_us = is_night ? TIMER_STABLE_NIGHT_US : TIMER_STABLE_US;
             break;
         default:
             timer_us = TIMER_UNKNOWN_US;
