@@ -2,7 +2,7 @@
 #include <gmock/gmock.h>
 
 #include "water_tank_app.hpp"
-#include "espnow_ota_trigger.hpp"
+#include "mock_tank_command_handler.hpp"
 #include "mock_i_level_sensor.hpp"
 #include "mock_float_switch.hpp"
 #include "mock_i_water_tank_storage.hpp"
@@ -13,7 +13,7 @@
 #include "mock_i_battery_monitor.hpp"
 #include "tank_geometry.hpp"
 #include "mock_hal_timer.hpp"
-#include "mock_ota_manager.hpp"
+#include "mock_ota_controller.hpp"
 #include "mock_hal_freertos.hpp"
 #include "mock_i_ota_trigger.hpp"
 #include "mock_hal_system.hpp"
@@ -62,14 +62,14 @@ protected:
     NiceMock<MockLevelSensor> mock_sensor;
     NiceMock<floatswitch::MockFloatSwitch> mock_float_switch;
     NiceMock<espnow::MockEspNowManager> mock_comm;
+    NiceMock<MockTankCommandHandler> mock_command_handler;
     NiceMock<power_control::MockPowerControl> mock_power;
     NiceMock<idf_hals::MockSleepHAL> mock_sleep;
     NiceMock<battery_monitor::MockBatteryMonitor> mock_battery;
     NiceMock<idf_hals::MockTimerHAL> mock_sys_timer;
-    NiceMock<MockOtaManager> mock_ota;
+    NiceMock<MockOtaController> mock_ota_controller;
     NiceMock<idf_hals::MockHalFreertos> mock_rtos;
     NiceMock<MockOtaTrigger> mock_btn_trigger;
-    NiceMock<MockOtaTrigger> mock_espnow_trigger;
     NiceMock<idf_hals::MockSystemHAL> mock_system_hal;
     NiceMock<wifi_manager::MockWiFiManager> mock_wifi;
     NiceMock<time_manager::MockTimeManager> mock_time_manager;
@@ -115,7 +115,18 @@ protected:
             return ret;
         }));
 
-        ON_CALL(mock_ota, init(_)).WillByDefault(Return(true));
+        ON_CALL(mock_ota_controller, init(_)).WillByDefault(Return(true));
+        ON_CALL(mock_ota_controller, check_pending_verify()).WillByDefault(Return(false));
+        ON_CALL(mock_ota_controller, get_running_version()).WillByDefault(Return(std::nullopt));
+        ON_CALL(mock_ota_controller, confirm_firmware(_)).WillByDefault(Return(OtaActionResult{
+            .success = true,
+            .exec_result = farm::OtaExecResult::CONFIRMED_SUCCESS,
+            .error_code = farm::OtaErrorCode::NONE}));
+        ON_CALL(mock_ota_controller, execute_download(_)).WillByDefault(Return(OtaActionResult{
+            .success = true,
+            .exec_result = farm::OtaExecResult::CONFIRMED_SUCCESS,
+            .error_code = farm::OtaErrorCode::NONE}));
+
         ON_CALL(mock_wifi, init(_)).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_time_manager, init(_)).WillByDefault(Return(ESP_OK));
         ON_CALL(Const(mock_time_manager), is_synchronized()).WillByDefault(Return(true));
@@ -124,15 +135,15 @@ protected:
         ON_CALL(mock_comm, init(_)).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_float_switch, init()).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_sensor, init()).WillByDefault(Return(ESP_OK));
+        ON_CALL(mock_command_handler, process(_)).WillByDefault(Return(TankCommandProcessResult{}));
 
         // Create the system under test
-        sut = create_app_with_queue(dummy_queue, nullptr, /*auto_init=*/false);
+        sut = create_app_with_queue(dummy_queue, /*auto_init=*/false);
     }
 
     std::unique_ptr<TestableWaterTankApp>
-    create_app_with_queue(QueueHandle_t rx_queue, IOtaTrigger* espnow_trigger_override = nullptr, bool auto_init = true)
+    create_app_with_queue(QueueHandle_t rx_queue, bool auto_init = true)
     {
-        IOtaTrigger& espnow_trig = espnow_trigger_override ? *espnow_trigger_override : mock_espnow_trigger;
         auto app = std::make_unique<TestableWaterTankApp>(
             mock_core_storage,
             mock_tank_storage,
@@ -140,6 +151,7 @@ protected:
             mock_float_switch,
             mock_comm,
             rx_queue,
+            mock_command_handler,
             mock_power,
             mock_sleep,
             mock_battery,
@@ -147,9 +159,8 @@ protected:
             mock_rtos,
             logic,
             mock_wifi,
-            mock_ota,
+            mock_ota_controller,
             mock_btn_trigger,
-            espnow_trig,
             mock_system_hal,
             mock_time_manager,
             mock_led_controller);
@@ -172,8 +183,8 @@ TEST_F(WaterTankAppTest, Init_Success_ConfiguresDependencies)
     EXPECT_CALL(mock_core_storage, init(_, _)).Times(1);
     EXPECT_CALL(mock_tank_storage, init_app_data(_, _)).Times(1);
 
-    // 2. OTA Manager is initialized
-    EXPECT_CALL(mock_ota, init(_)).Times(1);
+    // 2. OTA Controller is initialized
+    EXPECT_CALL(mock_ota_controller, init(_)).Times(1);
 
     // Wifi manager is initialized but not connected since is_logging=false
     EXPECT_CALL(mock_wifi, init(_)).Times(1);
@@ -187,9 +198,9 @@ TEST_F(WaterTankAppTest, Init_Success_ConfiguresDependencies)
 // Init Failure Tests
 // ==============================================================================
 
-TEST_F(WaterTankAppTest, Init_OtaManagerFail_ReturnsErrorImmediately)
+TEST_F(WaterTankAppTest, Init_OtaControllerFail_ReturnsErrorImmediately)
 {
-    EXPECT_CALL(mock_ota, init(_)).WillOnce(Return(false));
+    EXPECT_CALL(mock_ota_controller, init(_)).WillOnce(Return(false));
     EXPECT_CALL(mock_wifi, init(_)).Times(0);
 
     esp_err_t ret = sut->init(false);
@@ -462,8 +473,12 @@ TEST_F(WaterTankAppTest, Run_WhenRecoveryScan_WaitsCommReadyAndRetriesReportSend
 TEST_F(WaterTankAppTest, Run_PendingFirmwareVerify_MarksPartitionValid_WhenSessionHealthy)
 {
     // Arrange: Mock pending OTA verification state in run()
-    EXPECT_CALL(mock_ota, check_pending_verify()).WillOnce(Return(true));
-    EXPECT_CALL(mock_ota, confirm_app_valid()).WillOnce(Return(true));
+    EXPECT_CALL(mock_ota_controller, check_pending_verify()).WillOnce(Return(true));
+    EXPECT_CALL(mock_ota_controller, confirm_firmware(true))
+        .WillOnce(Return(OtaActionResult{
+            .success = true,
+            .exec_result = farm::OtaExecResult::CONFIRMED_SUCCESS,
+            .error_code = farm::OtaErrorCode::NONE}));
     EXPECT_CALL(mock_comm, get_node_state()).WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
     EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).WillRepeatedly(Return(ESP_OK));
 
@@ -477,29 +492,26 @@ TEST_F(WaterTankAppTest, Run_PendingFirmwareVerify_MarksPartitionValid_WhenSessi
 TEST_F(WaterTankAppTest, Run_RollsBackFirmware_WhenSessionNotHealthy)
 {
     // Arrange: Mock pending_verify state and healthy = false
-    EXPECT_CALL(mock_ota, check_pending_verify()).WillOnce(Return(true));
-
-    // Make session unhealthy by failing WiFi initialization (or another component after wifi is connected/started)
-    // To test disconnect_stop_wifi, wifi get_state must be != UNINITIALIZED and != INITIALIZED
-    EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::CONNECTED_GOT_IP));
-    EXPECT_CALL(mock_wifi, init(_)).WillOnce(Return(ESP_FAIL));
+    EXPECT_CALL(mock_ota_controller, check_pending_verify()).WillOnce(Return(true));
+    EXPECT_CALL(mock_ota_controller, confirm_firmware(false))
+        .WillOnce(Return(OtaActionResult{
+            .success = false,
+            .exec_result = farm::OtaExecResult::ROLLBACK_TRIGGERED,
+            .error_code = farm::OtaErrorCode::HEALTH_CHECK_FAILED}));
 
     // Check firmware will call wait_for_comm_ready -> comm_.get_node_state()
     EXPECT_CALL(mock_comm, get_node_state()).WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
-    EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).WillRepeatedly(Return(ESP_OK));
 
-    // Then disconnect_stop_wifi() will be called
-    EXPECT_CALL(mock_wifi, disconnect(_)).WillOnce(Return(ESP_OK));
-    EXPECT_CALL(mock_wifi, stop(_)).WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_wifi, disconnect(_)).WillRepeatedly(Return(ESP_OK));
+    EXPECT_CALL(mock_wifi, stop(_)).WillRepeatedly(Return(ESP_OK));
 
     // We expect rollback to be called because pending_firmware_verify_ = true and session_healthy_ = false
-    EXPECT_CALL(mock_ota, rollback_and_reboot()).Times(1);
+    EXPECT_CALL(mock_ota_controller, rollback_and_reboot()).Times(1);
 
-    // Act
-    esp_err_t ret = sut->init(false);
-
-    // Assert
-    EXPECT_EQ(ret, ESP_FAIL);
+    sut->init(false);
+    sut->set_session_healthy(false);
+    sut->run(true);
 }
 
 TEST_F(WaterTankAppTest, OnOtaTriggered_EntersWifiListeningMode)
@@ -509,8 +521,9 @@ TEST_F(WaterTankAppTest, OnOtaTriggered_EntersWifiListeningMode)
 
     EXPECT_CALL(mock_comm, deinit()).Times(2);
     EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::CONNECTED_GOT_IP));
-    EXPECT_CALL(mock_ota, start_ota()).Times(1);
-    EXPECT_CALL(mock_ota, get_status()).WillRepeatedly(Return(OtaStatus::READY_TO_RESTART));
+    EXPECT_CALL(mock_ota_controller, execute_download(_))
+        .WillOnce(Return(OtaActionResult{.success = true}));
+    EXPECT_CALL(mock_system_hal, restart()).Times(1);
 
     sut->run(true);
 }
@@ -589,101 +602,47 @@ TEST_F(WaterTankAppTest, Run_SendsFloatSwitchFullFlagInReport)
 
 TEST_F(WaterTankAppTest, Run_ProcessesStartOtaCommand)
 {
-    QueueHandle_t fake_queue = reinterpret_cast<QueueHandle_t>(0x1234);
-    EspNowOtaTrigger real_espnow_trigger;
-    auto sut_with_queue = create_app_with_queue(fake_queue, &real_espnow_trigger);
-
-    espnow::AppMessage msg{};
-    msg.msg_type = espnow::MessageType::COMMAND;
-    msg.payload_type = static_cast<uint8_t>(espnow::CommandType::START_OTA);
-
-    EXPECT_CALL(mock_rtos, queue_receive(fake_queue, _, _))
-        .WillOnce(Invoke([msg](QueueHandle_t, void* data, TickType_t) {
-            if (data)
-                *static_cast<espnow::AppMessage*>(data) = msg;
-            return pdPASS;
-        }));
+    EXPECT_CALL(mock_command_handler, process(_))
+        .WillOnce(Return(TankCommandProcessResult{.ota_requested = true}));
 
     EXPECT_CALL(mock_comm, deinit()).Times(2);
     EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::CONNECTED_GOT_IP));
-    EXPECT_CALL(mock_ota, start_ota()).Times(1);
-    EXPECT_CALL(mock_ota, get_status()).WillRepeatedly(Return(OtaStatus::READY_TO_RESTART));
+    EXPECT_CALL(mock_ota_controller, execute_download(_)).WillOnce(Return(OtaActionResult{.success = true}));
+    EXPECT_CALL(mock_system_hal, restart()).Times(1);
 
-    sut_with_queue->run(true);
+    sut->run(true);
 }
 
 TEST_F(WaterTankAppTest, Run_ProcessesRebootCommand)
 {
-    QueueHandle_t fake_queue = reinterpret_cast<QueueHandle_t>(0x1234);
-    auto sut_with_queue = create_app_with_queue(fake_queue);
+    EXPECT_CALL(mock_command_handler, process(_))
+        .WillOnce(Return(TankCommandProcessResult{.reboot_requested = true}));
 
-    espnow::AppMessage msg{};
-    msg.msg_type = espnow::MessageType::COMMAND;
-    msg.payload_type = static_cast<uint8_t>(espnow::CommandType::REBOOT);
-
-    EXPECT_CALL(mock_rtos, queue_receive(fake_queue, _, _))
-        .WillOnce(Invoke([msg](QueueHandle_t, void* data, TickType_t) {
-            if (data)
-                *static_cast<espnow::AppMessage*>(data) = msg;
-            return pdPASS;
-        }));
-
+    EXPECT_CALL(mock_core_storage, save_core(_, false)).Times(1);
+    EXPECT_CALL(mock_tank_storage, save_app_data(_, false)).Times(1);
     EXPECT_CALL(mock_system_hal, restart()).Times(1);
 
-    sut_with_queue->run(true);
+    sut->run(true);
 }
 
 TEST_F(WaterTankAppTest, Run_ProcessesSleepOverrideCommand)
 {
-    QueueHandle_t fake_queue = reinterpret_cast<QueueHandle_t>(0x1234);
-    auto sut_with_queue = create_app_with_queue(fake_queue);
-
-    farm::SleepOverrideCommand override_cmd{.sleep_time_s = 120};
-    espnow::AppMessage msg{};
-    msg.msg_type = espnow::MessageType::COMMAND;
-    msg.payload_type = static_cast<uint8_t>(farm::CommandType::SLEEP_OVERRIDE);
-    msg.payload_len = sizeof(override_cmd);
-    memcpy(msg.payload, &override_cmd, sizeof(override_cmd));
-
-    EXPECT_CALL(mock_rtos, queue_receive(fake_queue, _, _))
-        .WillOnce(Invoke([msg](QueueHandle_t, void* data, TickType_t) {
-            if (data)
-                *static_cast<espnow::AppMessage*>(data) = msg;
-            return pdPASS;
-        }));
+    EXPECT_CALL(mock_command_handler, process(_))
+        .WillOnce(Return(TankCommandProcessResult{.override_sleep_us = 120000000ULL}));
 
     EXPECT_CALL(mock_sleep, enable_timer_wakeup(120000000ULL)).WillOnce(Return(ESP_OK));
 
-    sut_with_queue->run(true);
+    sut->run(true);
 }
 
-TEST_F(WaterTankAppTest, Run_ProcessesCommandsWithAckRequired_SendsConfirmReception)
+TEST_F(WaterTankAppTest, Run_ProcessesSleepOverride_ConfiguresTimerWakeup)
 {
-    QueueHandle_t fake_queue = reinterpret_cast<QueueHandle_t>(0x1234);
-    auto sut_with_queue = create_app_with_queue(fake_queue);
-
-    farm::SleepOverrideCommand override_cmd{.sleep_time_s = 60};
-    espnow::AppMessage msg{};
-    msg.sender_id = static_cast<espnow::NodeId>(farm::NodeId::HUB);
-    msg.sequence_number = 42;
-    msg.requires_ack = true;
-    msg.msg_type = espnow::MessageType::COMMAND;
-    msg.payload_type = static_cast<uint8_t>(farm::CommandType::SLEEP_OVERRIDE);
-    msg.payload_len = sizeof(override_cmd);
-    memcpy(msg.payload, &override_cmd, sizeof(override_cmd));
-
-    EXPECT_CALL(mock_rtos, queue_receive(fake_queue, _, _))
-        .WillOnce(Invoke([msg](QueueHandle_t, void* data, TickType_t) {
-            if (data)
-                *static_cast<espnow::AppMessage*>(data) = msg;
-            return pdPASS;
-        }));
-
-    EXPECT_CALL(mock_comm, confirm_reception(msg.sender_id, 42, espnow::AckStatus::OK)).WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_command_handler, process(_))
+        .WillOnce(Return(TankCommandProcessResult{.override_sleep_us = 60000000ULL}));
 
     EXPECT_CALL(mock_sleep, enable_timer_wakeup(60000000ULL)).WillOnce(Return(ESP_OK));
 
-    sut_with_queue->run(true);
+    sut->run(true);
 }
 
 TEST_F(WaterTankAppTest, Run_PeriodicNvsCommit_ForcesCommitWhenIntervalReached)
@@ -711,11 +670,15 @@ TEST_F(WaterTankAppTest, Run_CancelsOta_WhenOtaFails)
 
     EXPECT_CALL(mock_comm, deinit()).Times(2);
     EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::CONNECTED_GOT_IP));
-    EXPECT_CALL(mock_ota, start_ota()).Times(1);
+    EXPECT_CALL(mock_ota_controller, execute_download(_))
+        .WillOnce(Return(OtaActionResult{
+            .success = false,
+            .exec_result = farm::OtaExecResult::DOWNLOAD_FAILED,
+            .error_code = farm::OtaErrorCode::HTTP_DOWNLOAD_FAILED}));
 
-    EXPECT_CALL(mock_ota, get_status()).WillRepeatedly(Return(OtaStatus::FAILED));
-    EXPECT_CALL(mock_ota, get_last_error()).WillOnce(Return(OtaFailReason::MANIFEST_HTTP_FAIL));
-    EXPECT_CALL(mock_ota, cancel_ota()).Times(1);
+    EXPECT_CALL(mock_comm, init(_)).WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_comm, get_node_state()).WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
+    EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).Times(2).WillRepeatedly(Return(ESP_OK));
 
     sut->run(true);
 }
@@ -768,13 +731,11 @@ TEST_F(WaterTankAppTest, ProcessPendingOta_FailsOnWatchdogTimeoutAndLogs)
     EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::CONNECTED_GOT_IP));
 
     EXPECT_CALL(mock_comm, deinit()).Times(1);
-    EXPECT_CALL(mock_ota, start_ota()).Times(1);
-
-    EXPECT_CALL(mock_ota, get_status()).WillRepeatedly(Return(OtaStatus::DOWNLOADING));
-
-    EXPECT_CALL(mock_rtos, task_delay(pdMS_TO_TICKS(500))).Times(testing::AtLeast(1));
-
-    EXPECT_CALL(mock_ota, cancel_ota()).Times(1);
+    EXPECT_CALL(mock_ota_controller, execute_download(_))
+        .WillOnce(Return(OtaActionResult{
+            .success = false,
+            .exec_result = farm::OtaExecResult::DOWNLOAD_FAILED,
+            .error_code = farm::OtaErrorCode::WATCHDOG_TIMEOUT}));
 
     EXPECT_CALL(mock_comm, init(_)).WillOnce(Return(ESP_OK));
     EXPECT_CALL(mock_comm, set_channel_policy(espnow::ChannelPolicy::FIXED)).Times(1);
@@ -788,7 +749,11 @@ TEST_F(WaterTankAppTest, CheckFirmwareHealthy_ConfirmsAppAndSendsReportOnSuccess
 {
     sut->set_session_healthy(true);
 
-    EXPECT_CALL(mock_ota, confirm_app_valid()).WillOnce(Return(true));
+    EXPECT_CALL(mock_ota_controller, confirm_firmware(true))
+        .WillOnce(Return(OtaActionResult{
+            .success = true,
+            .exec_result = farm::OtaExecResult::CONFIRMED_SUCCESS,
+            .error_code = farm::OtaErrorCode::NONE}));
 
     EXPECT_CALL(mock_comm, get_node_state()).WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
     EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).WillOnce(Return(ESP_OK));
@@ -799,7 +764,7 @@ TEST_F(WaterTankAppTest, CheckFirmwareHealthy_ConfirmsAppAndSendsReportOnSuccess
 TEST_F(WaterTankAppTest, UpdateRunningVersion_PopulatesCoreVersion)
 {
     OtaVersion mock_desc{1, 2, 3};
-    EXPECT_CALL(mock_ota, get_running_version()).WillRepeatedly(Return(mock_desc));
+    EXPECT_CALL(mock_ota_controller, get_running_version()).WillRepeatedly(Return(mock_desc));
 
     sut->init(false);
 
@@ -813,41 +778,18 @@ TEST_F(WaterTankAppTest, UpdateRunningVersion_PopulatesCoreVersion)
 
 TEST_F(WaterTankAppTest, Run_ProcessesSyncTimeCommand_PopulatesCore)
 {
-    QueueHandle_t fake_queue = reinterpret_cast<QueueHandle_t>(0x1234);
-    auto sut_with_queue = create_app_with_queue(fake_queue);
+    EXPECT_CALL(mock_command_handler, process(_))
+        .WillOnce(Return(TankCommandProcessResult{.time_synced = true}));
 
-    farm::TimeSyncCommand sync_cmd{};
-    sync_cmd.timestamp_ms = 1700000000000ULL;
-    sync_cmd.tz_offset_min = -240;
-    sync_cmd.sync_source = 3;
-    sync_cmd.flags = 1;
-
-    espnow::AppMessage msg{};
-    msg.msg_type = espnow::MessageType::COMMAND;
-    msg.payload_type = static_cast<uint8_t>(farm::CommandType::SYNC_TIME);
-    msg.payload_len = sizeof(sync_cmd);
-    memcpy(msg.payload, &sync_cmd, sizeof(sync_cmd));
-
-    EXPECT_CALL(mock_rtos, queue_receive(fake_queue, _, _))
-        .WillOnce(Invoke([msg](QueueHandle_t, void* data, TickType_t) {
-            if (data)
-                *static_cast<espnow::AppMessage*>(data) = msg;
-            return pdPASS;
-        }));
-
-    EXPECT_CALL(mock_time_manager, sync_from_time_packet(_))
-        .WillOnce(Invoke([](const time_manager::TimeSyncPacket& pkt) {
-            EXPECT_EQ(pkt.timestamp_ms, 1700000000000ULL);
-            EXPECT_EQ(pkt.tz_offset_min, -240);
-            return ESP_OK;
-        }));
+    EXPECT_CALL(mock_time_manager, is_synchronized()).WillRepeatedly(Return(true));
+    EXPECT_CALL(mock_time_manager, get_timestamp_ms()).WillRepeatedly(Return(1700000000000ULL));
 
     EXPECT_CALL(mock_core_storage, save_core(_, true)).WillOnce(Return(ESP_OK));
 
-    sut_with_queue->run(true);
+    sut->run(true);
 
-    EXPECT_TRUE(sut_with_queue->get_core_data().has_valid_time);
-    EXPECT_EQ(sync_cmd.timestamp_ms, sut_with_queue->get_core_data().last_sync_unix_time_ms);
+    EXPECT_TRUE(sut->get_core_data().has_valid_time);
+    EXPECT_EQ(1700000000000ULL, sut->get_core_data().last_sync_unix_time_ms);
 }
 
 TEST_F(WaterTankAppTest, Run_UnsynchronizedTime_DoesNotSendActiveTimeSyncRequest)
@@ -871,54 +813,20 @@ TEST_F(WaterTankAppTest, Run_UnsynchronizedTime_DoesNotSendActiveTimeSyncRequest
 
 TEST_F(WaterTankAppTest, Run_ProcessesMultipleCommandsInListenWindow)
 {
-    QueueHandle_t fake_queue = reinterpret_cast<QueueHandle_t>(0x1234);
-    auto sut_with_queue = create_app_with_queue(fake_queue);
+    EXPECT_CALL(mock_command_handler, process(_))
+        .WillOnce(Return(TankCommandProcessResult{
+            .time_synced = true,
+            .override_sleep_us = 300000000ULL}));
 
-    farm::TimeSyncCommand sync_cmd{};
-    sync_cmd.timestamp_ms = 1710000000000ULL;
-    sync_cmd.tz_offset_min = -180;
-
-    espnow::AppMessage sync_msg{};
-    sync_msg.msg_type = espnow::MessageType::COMMAND;
-    sync_msg.payload_type = static_cast<uint8_t>(farm::CommandType::SYNC_TIME);
-    sync_msg.payload_len = sizeof(sync_cmd);
-    memcpy(sync_msg.payload, &sync_cmd, sizeof(sync_cmd));
-
-    farm::SleepOverrideCommand override_cmd{.sleep_time_s = 300};
-    espnow::AppMessage sleep_msg{};
-    sleep_msg.msg_type = espnow::MessageType::COMMAND;
-    sleep_msg.payload_type = static_cast<uint8_t>(farm::CommandType::SLEEP_OVERRIDE);
-    sleep_msg.payload_len = sizeof(override_cmd);
-    memcpy(sleep_msg.payload, &override_cmd, sizeof(override_cmd));
-
-    size_t call_count = 0;
-    EXPECT_CALL(mock_rtos, queue_receive(fake_queue, _, _))
-        .WillRepeatedly(Invoke([sync_msg, sleep_msg, &call_count](QueueHandle_t, void* data, TickType_t) {
-            call_count++;
-            if (call_count == 1) {
-                if (data)
-                    *static_cast<espnow::AppMessage*>(data) = sync_msg;
-                return pdPASS;
-            }
-            if (call_count == 2) {
-                if (data)
-                    *static_cast<espnow::AppMessage*>(data) = sleep_msg;
-                return pdPASS;
-            }
-            return pdFAIL;
-        }));
-
-    EXPECT_CALL(mock_time_manager, sync_from_time_packet(_))
-        .WillOnce(Invoke([](const time_manager::TimeSyncPacket& pkt) {
-            EXPECT_EQ(pkt.timestamp_ms, 1710000000000ULL);
-            return ESP_OK;
-        }));
+    EXPECT_CALL(mock_time_manager, is_synchronized()).WillRepeatedly(Return(true));
+    EXPECT_CALL(mock_time_manager, get_timestamp_ms()).WillRepeatedly(Return(1710000000000ULL));
 
     EXPECT_CALL(mock_sleep, enable_timer_wakeup(300000000ULL)).WillOnce(Return(ESP_OK));
 
-    sut_with_queue->run(true);
+    sut->run(true);
 
-    EXPECT_TRUE(sut_with_queue->get_core_data().has_valid_time);
+    EXPECT_TRUE(sut->get_core_data().has_valid_time);
+    EXPECT_EQ(1710000000000ULL, sut->get_core_data().last_sync_unix_time_ms);
 }
 
 TEST_F(WaterTankAppTest, Run_PairingNodeState_AddsHubPeer)

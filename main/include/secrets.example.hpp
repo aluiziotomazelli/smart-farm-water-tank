@@ -21,12 +21,18 @@
 // OTA Firmware Server Configuration
 // =============================================================================
 // URL of the HTTP OTA manifest file used by the ota_manager component.
-#define SERVER_URL "http://ota-server.local:8070/manifests/pump_controller.json"
+#define SERVER_URL "http://ota-server.local:8070/manifests/water_tank.json"
+
+// =============================================================================
+// Remote UDP Logger Configuration
+// =============================================================================
+#define UDP_LOG_SERVER_IP "192.168.1.23"
+#define UDP_LOG_PORT 4444
 
 // =============================================================================
 // Hub MAC Address (Optional / Peer Registration)
 // =============================================================================
-// Note: In standard operation, the Pump Controller uses automatic discovery or broadcast
+// Note: In standard operation, the Water Tank uses automatic discovery or broadcast
 // to reach the Hub. These definitions are NOT currently active in the default flow.
 // However, if the application needs to explicitly and statically register the Hub
 // as a known peer before communication, use the Hub's MAC address with:

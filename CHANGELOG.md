@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-27
+
+### Added
+- Created `IOtaController` interface and concrete `OtaController` component implementing OTA lifecycle operations (initialization, firmware confirmation, polling download worker, rollback handling, and version retrieval).
+- Added `MockOtaController` in `host_test/mocks/` and dedicated unit test suite in `host_test/test_ota_controller/` with 13 test cases.
+- Added `UDP_LOG_SERVER_IP` and `UDP_LOG_PORT` network configuration definitions to `secrets.example.hpp`.
+- Integrated `test_ota_controller` into root `host_test/CMakeLists.txt` for automated CTest and CI execution.
+
+### Changed
+- Refactored `WaterTankApp` to inject `IOtaController&` instead of `IOtaManager&`, removing inline OTA polling loops and error code mappings.
+- Replaced hardcoded UDP logger IP and port in `WaterTankApp::init` with definitions from `secrets.hpp`.
+- Updated `WaterTankAppTest` fixture and all OTA test cases to use `MockOtaController`.
+- Bumped firmware version to `0.3.12`.
+
+## [0.3.11] - 2026-08-27
+
+### Added
+- Created `ITankCommandHandler` interface and concrete `TankCommandHandler` component with full support for generic transport commands (`START_OTA`, `REBOOT`) and application commands (`SLEEP_OVERRIDE`, `SYNC_TIME`) with acknowledgement handling.
+- Added `MockTankCommandHandler` in `host_test/mocks/` and dedicated unit test suite in `host_test/test_tank_command_handler/`.
+- Integrated `test_tank_command_handler` into root `host_test/CMakeLists.txt` for automated CTest and CI execution.
+
+### Changed
+- Injected `ITankCommandHandler&` into `WaterTankApp`, decoupling command processing and message listening from application business logic.
+- Removed legacy inline command processing methods (`listen_for_messages`, `process_command`, `send_cmd_ack`, `sync_time_from_espnow_packet`) from `WaterTankApp`.
+- Updated `WaterTankAppTest` fixture and test cases to use `MockTankCommandHandler`.
+- Bumped firmware version to `0.3.11`.
+
 ## [0.3.10] - 2026-08-21
 
 ### Added

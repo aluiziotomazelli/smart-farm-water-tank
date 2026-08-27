@@ -13,8 +13,9 @@
 #include "nvs_core.hpp"
 #include "secrets.hpp"
 #include "ota_manager.hpp"
+#include "ota_controller.hpp"
 #include "button_ota_trigger.hpp"
-#include "espnow_ota_trigger.hpp"
+#include "tank_command_handler.hpp"
 #include "wifi_manager.hpp"
 
 #include "led_controller.hpp"
@@ -159,10 +160,10 @@ static OtaConfig ota_config{
     .restart_on_success = false,
 };
 static OtaManager ota_manager(ota_deps);
+static OtaController ota_controller(ota_manager, hal_freertos);
 
-// OTA triggers: boot button + espnow
+// OTA triggers: boot button
 static ButtonOtaTrigger btn_trigger(hal_gpio, hal_freertos, BOOT_BUTTON_GPIO, 200);
-static EspNowOtaTrigger espnow_ota_trigger;
 
 // Status LED Controller
 static LedConfig led_config{
@@ -187,6 +188,9 @@ extern "C" void app_main()
     auto& wifi = wifi_manager::WiFiManager::get_instance();
     auto& espnow = espnow::EspNowManager::instance();
 
+    // Command Handler
+    TankCommandHandler command_handler{app_rx_queue, espnow, time_mgr, hal_timer, hal_freertos};
+
     // Instantiate app with dependencies
     WaterTankApp app(
         nvs_core,
@@ -195,6 +199,7 @@ extern "C" void app_main()
         float_switch,
         espnow,
         app_rx_queue,
+        command_handler,
         power,
         sleep_hw,
         bat_monitor,
@@ -202,9 +207,8 @@ extern "C" void app_main()
         hal_freertos,
         logic,
         wifi,
-        ota_manager,
+        ota_controller,
         btn_trigger,
-        espnow_ota_trigger,
         hal_system,
         time_mgr,
         led_controller);
