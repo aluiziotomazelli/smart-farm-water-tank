@@ -16,7 +16,7 @@ public:
 
     void process_reading(const ultrasonic::Reading& reading, WaterTankStats& stats);
 
-    uint64_t calculate_sleep_time_us(const WaterTankStats& stats) const;
+    uint64_t calculate_sleep_time_us(const WaterTankStats& stats, bool is_night = false) const;
 
     void update_operation_mode(WaterTankStats& stats) const;
 

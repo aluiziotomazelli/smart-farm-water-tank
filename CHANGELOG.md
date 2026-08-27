@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-08-27
+
+### Added
+- Added nighttime adaptive sleep schedule for `STABLE` and full backup states: 15 minutes (`TIMER_STABLE_NIGHT_US`) between 22:00 and 06:00 (`NIGHT_START_HOUR` / `NIGHT_END_HOUR`), preserving 5 minutes during the day and active evening.
+- Added pure boolean `is_night` argument in `WaterTankLogic::calculate_sleep_time_us`.
+- Added unit test cases for day vs night sleep intervals in `WaterTankLogicTest`.
+
+### Changed
+- Bumped firmware version to `0.4.1`.
+
 ## [0.4.0] - 2026-08-27
 
 ### Added
