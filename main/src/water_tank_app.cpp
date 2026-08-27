@@ -30,9 +30,6 @@ static constexpr uint16_t DISCONNECT_WIFI_TIMEOUT_MS = 2000;
 
 static const char* TAG = "WaterTankApp";
 
-// Forward
-static farm::OtaErrorCode map_ota_fail_reason(OtaFailReason reason);
-
 WaterTankApp::WaterTankApp(
     INvsCore& core_storage,
     IWaterTankNvs& tank_storage,
@@ -48,7 +45,7 @@ WaterTankApp::WaterTankApp(
     idf_hals::IHalFreertos& rtos,
     WaterTankLogic& logic,
     wifi_manager::IWiFiManager& wifi,
-    IOtaManager& ota_manager,
+    IOtaController& ota_controller,
     IOtaTrigger& btn_trigger,
     idf_hals::ISystemHAL& system_hal,
     time_manager::ITimeManager& time_manager,
@@ -67,7 +64,7 @@ WaterTankApp::WaterTankApp(
     , rtos_(rtos)
     , logic_(logic)
     , wifi_(wifi)
-    , ota_manager_(ota_manager)
+    , ota_controller_(ota_controller)
     , btn_trigger_(btn_trigger)
     , system_hal_(system_hal)
     , time_manager_(time_manager)
@@ -92,8 +89,8 @@ esp_err_t WaterTankApp::init(bool is_logging)
     }
     led_controller_.start();
 
-    // 1. OTA Manager first to handle OTA updates
-    if ((err = init_ota_manager()) != ESP_OK) {
+    // 1. OTA Controller first to handle OTA updates
+    if ((err = init_ota_controller()) != ESP_OK) {
         led_controller_.set_pattern(BlinkPattern::ERROR_BURST);
         return err;
     }
@@ -113,7 +110,7 @@ esp_err_t WaterTankApp::init(bool is_logging)
     if (is_logging) {
         if (wifi_.connect(CONNECT_WIFI_TIMEOUT_MS, /* max attempts = */ 3) == ESP_OK) {
             espnow_.set_channel_policy(espnow::ChannelPolicy::FIXED); // Can be used even before comm init()
-            udp_logger::init("192.168.1.23", 4444);
+            udp_logger::init(UDP_LOG_SERVER_IP, UDP_LOG_PORT);
             rtos_.task_delay(pdMS_TO_TICKS(5000));
         }
     }
@@ -159,7 +156,7 @@ esp_err_t WaterTankApp::init(bool is_logging)
     // 9. Rollback if session is not healthy
     if (!session_healthy_) {
         led_controller_.set_pattern(BlinkPattern::ERROR_BURST);
-        if (ota_manager_.check_pending_verify()) {
+        if (ota_controller_.check_pending_verify()) {
             ESP_LOGE(TAG, "Session is not healthy during OTA verification.");
             check_firmware_healthy();
         }
@@ -278,12 +275,13 @@ bool WaterTankApp::run(bool enter_sleep)
         process_pending_ota();
     }
 
-    if (ota_manager_.check_pending_verify()) {
+    if (ota_controller_.check_pending_verify()) {
         check_firmware_healthy();
     }
 
     // 9. Calculate sleep time & determine GPIO wakeup status
-    uint64_t sleep_time_us = (cmd_res.override_sleep_us > 0) ? cmd_res.override_sleep_us : logic_.calculate_sleep_time_us(stats_);
+    uint64_t sleep_time_us =
+        (cmd_res.override_sleep_us > 0) ? cmd_res.override_sleep_us : logic_.calculate_sleep_time_us(stats_);
     stats_.gpio_wakeup_enabled = float_switch_.should_enable_wakeup();
 
     // 10. Save updated state (Core & Tank Storage)
@@ -292,7 +290,7 @@ bool WaterTankApp::run(bool enter_sleep)
     // 11. Enter deep sleep (or delay if enter_sleep is false for testing)
     if (enter_sleep) {
         enter_deep_sleep(sleep_time_us);
-        return false;
+        return false; // Never reached
     }
     return true;
 }
@@ -511,62 +509,39 @@ void WaterTankApp::process_pending_ota()
     bool previous_connected = (wifi_.get_state() == wifi_manager::State::CONNECTED_GOT_IP);
     bool wifi_ok = previous_connected;
 
-    if (!wifi_ok) {
+    if (!previous_connected) {
         wifi_ok = (wifi_.connect(CONNECT_WIFI_TIMEOUT_MS, /* max attempts = */ 3) == ESP_OK);
     }
 
-    farm::OtaExecResult exec_result;
-    farm::OtaErrorCode err_code = farm::OtaErrorCode::NONE;
+    OtaActionResult ota_res{};
 
     static constexpr uint32_t OTA_WATCHDOG_TIMEOUT_MS = 120000;
 
     if (wifi_ok) {
-        // Run OTA worker task
-        ota_manager_.start_ota();
-        uint32_t elapsed_ms = 0;
-        OtaStatus status = ota_manager_.get_status();
-
-        while (status != OtaStatus::READY_TO_RESTART && status != OtaStatus::FAILED &&
-               elapsed_ms < OTA_WATCHDOG_TIMEOUT_MS) {
-            rtos_.task_delay(pdMS_TO_TICKS(500));
-            elapsed_ms += 500;
-            status = ota_manager_.get_status();
-        }
-
-        if (status == OtaStatus::READY_TO_RESTART) {
+        ota_res = ota_controller_.execute_download(OTA_WATCHDOG_TIMEOUT_MS);
+        if (ota_res.success) {
             ESP_LOGI(TAG, "OTA completed successfully. Restarting...");
             wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
             wifi_.stop(DISCONNECT_WIFI_TIMEOUT_MS);
             system_hal_.restart();
+            return;
         }
-        else {
-            exec_result = farm::OtaExecResult::DOWNLOAD_FAILED;
-            if (status == OtaStatus::FAILED) {
-                OtaFailReason reason = ota_manager_.get_last_error();
-                err_code = map_ota_fail_reason(reason);
-                ESP_LOGE(TAG, "OTA failed (R:%d | C:%d)", static_cast<int>(reason), static_cast<int>(err_code));
-            }
-            else if (elapsed_ms >= OTA_WATCHDOG_TIMEOUT_MS) {
-                err_code = farm::OtaErrorCode::WATCHDOG_TIMEOUT;
-                ESP_LOGE(TAG, "OTA watchdog timeout (%u ms)", static_cast<unsigned int>(elapsed_ms));
-            }
-            led_controller_.set_pattern(BlinkPattern::ERROR_BURST);
-        }
+        led_controller_.set_pattern(BlinkPattern::ERROR_BURST);
     }
     else {
         ESP_LOGE(TAG, "Failed to connect to WiFi for OTA");
-        exec_result = farm::OtaExecResult::DOWNLOAD_FAILED;
-        err_code = farm::OtaErrorCode::WIFI_CONNECT_FAILED;
+        ota_res.success = false;
+        ota_res.exec_result = farm::OtaExecResult::DOWNLOAD_FAILED;
+        ota_res.error_code = farm::OtaErrorCode::WIFI_CONNECT_FAILED;
         led_controller_.set_pattern(BlinkPattern::ERROR_BURST);
     }
 
-    ota_manager_.cancel_ota();
     if (!previous_connected) {
         wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
     }
     if (init_espnow() == ESP_OK) {
         espnow_.set_channel_policy(previous_connected ? espnow::ChannelPolicy::FIXED : espnow::ChannelPolicy::SCAN);
-        send_ota_report(exec_result, err_code);
+        send_ota_report(ota_res.exec_result, ota_res.error_code);
     }
 }
 
@@ -622,7 +597,7 @@ esp_err_t WaterTankApp::init_espnow()
     return espnow_.init(config);
 }
 
-esp_err_t WaterTankApp::init_ota_manager()
+esp_err_t WaterTankApp::init_ota_controller()
 {
     OtaConfig ota_config{
         .device_type = "water_tank",
@@ -635,8 +610,8 @@ esp_err_t WaterTankApp::init_ota_manager()
         .restart_on_success = false,
     };
 
-    if (!ota_manager_.init(ota_config)) {
-        ESP_LOGE(TAG, "Failed to initialize OTA Manager");
+    if (!ota_controller_.init(ota_config)) {
+        ESP_LOGE(TAG, "Failed to initialize OTA Controller");
         return ESP_FAIL;
     }
 
@@ -645,28 +620,30 @@ esp_err_t WaterTankApp::init_ota_manager()
 
 void WaterTankApp::check_firmware_healthy()
 {
-    if (!session_healthy_ || !ota_manager_.confirm_app_valid()) {
-        farm::OtaErrorCode err =
-            !session_healthy_ ? farm::OtaErrorCode::HEALTH_CHECK_FAILED : farm::OtaErrorCode::PARTITION_CONFIRM_FAILED;
+    OtaActionResult verify_res = ota_controller_.confirm_firmware(session_healthy_);
 
-        ESP_LOGE(TAG, "Failed to confirm firmware. Triggering rollback (reason: %d).", static_cast<int>(err));
+    if (!verify_res.success) {
+        ESP_LOGE(
+            TAG,
+            "Failed to confirm firmware. Triggering rollback (reason: %d).",
+            static_cast<int>(verify_res.error_code));
         led_controller_.set_pattern(BlinkPattern::ERROR_BURST);
 
         if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
-            send_ota_report(farm::OtaExecResult::ROLLBACK_TRIGGERED, err);
+            send_ota_report(verify_res.exec_result, verify_res.error_code);
         }
         wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
         wifi_.stop(DISCONNECT_WIFI_TIMEOUT_MS);
-        ota_manager_.rollback_and_reboot();
+        ota_controller_.rollback_and_reboot();
         return;
     }
 
     pending_core_commit_ = true;
-    ESP_LOGI(TAG, "Firmware confirmed successfully. Versio: %d.%d.%d", core_.fw_major, core_.fw_minor, core_.fw_patch);
+    ESP_LOGI(TAG, "Firmware confirmed successfully. Version: %d.%d.%d", core_.fw_major, core_.fw_minor, core_.fw_patch);
     led_controller_.set_pattern(BlinkPattern::BOOT_SUCCESS);
 
     if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
-        send_ota_report(farm::OtaExecResult::CONFIRMED_SUCCESS, farm::OtaErrorCode::NONE);
+        send_ota_report(verify_res.exec_result, verify_res.error_code);
     }
 }
 
@@ -754,46 +731,9 @@ esp_err_t WaterTankApp::send_ota_report(farm::OtaExecResult result, farm::OtaErr
     );
 }
 
-static farm::OtaErrorCode map_ota_fail_reason(OtaFailReason reason)
-{
-    switch (reason) {
-    case OtaFailReason::MANIFEST_URL_INVALID:
-    case OtaFailReason::MANIFEST_INVALID:
-        return farm::OtaErrorCode::MANIFEST_PARSE_ERROR;
-
-    case OtaFailReason::MANIFEST_HTTP_FAIL:
-    case OtaFailReason::FIRMWARE_URL_INVALID:
-    case OtaFailReason::DOWNLOAD_HTTP_FAIL:
-        return farm::OtaErrorCode::HTTP_DOWNLOAD_FAILED;
-
-    case OtaFailReason::DEVICE_TYPE_MISMATCH:
-        return farm::OtaErrorCode::DEVICE_TYPE_MISMATCH;
-
-    case OtaFailReason::CURRENT_VERSION_PARSE_FAIL:
-    case OtaFailReason::VERSION_NOT_NEWER:
-    case OtaFailReason::DOWNLOAD_IMAGE_VERSION_FAIL:
-        return farm::OtaErrorCode::VERSION_NOT_NEWER;
-
-    case OtaFailReason::DOWNLOAD_SESSION_FAIL:
-    case OtaFailReason::DOWNLOAD_IMAGE_DESC_FAIL:
-        return farm::OtaErrorCode::DOWNLOAD_SESSION_FAIL;
-
-    case OtaFailReason::DOWNLOAD_FINISH_FAIL:
-    case OtaFailReason::HASH_PARTITION_FAIL:
-        return farm::OtaErrorCode::FLASH_WRITE_ERROR;
-
-    case OtaFailReason::HASH_MISMATCH:
-        return farm::OtaErrorCode::IMAGE_HASH_MISMATCH;
-
-    case OtaFailReason::NONE:
-    default:
-        return farm::OtaErrorCode::UNKNOWN_ERROR;
-    }
-}
-
 void WaterTankApp::update_running_version()
 {
-    auto current_version = ota_manager_.get_running_version();
+    auto current_version = ota_controller_.get_running_version();
 
     if (current_version.has_value()) {
         if (core_.fw_major != current_version->major || core_.fw_minor != current_version->minor ||

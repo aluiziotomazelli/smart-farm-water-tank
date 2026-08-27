@@ -13,7 +13,7 @@
 #include "mock_i_battery_monitor.hpp"
 #include "tank_geometry.hpp"
 #include "mock_hal_timer.hpp"
-#include "mock_ota_manager.hpp"
+#include "mock_ota_controller.hpp"
 #include "mock_hal_freertos.hpp"
 #include "mock_i_ota_trigger.hpp"
 #include "mock_hal_system.hpp"
@@ -67,7 +67,7 @@ protected:
     NiceMock<idf_hals::MockSleepHAL> mock_sleep;
     NiceMock<battery_monitor::MockBatteryMonitor> mock_battery;
     NiceMock<idf_hals::MockTimerHAL> mock_sys_timer;
-    NiceMock<MockOtaManager> mock_ota;
+    NiceMock<MockOtaController> mock_ota_controller;
     NiceMock<idf_hals::MockHalFreertos> mock_rtos;
     NiceMock<MockOtaTrigger> mock_btn_trigger;
     NiceMock<idf_hals::MockSystemHAL> mock_system_hal;
@@ -115,7 +115,18 @@ protected:
             return ret;
         }));
 
-        ON_CALL(mock_ota, init(_)).WillByDefault(Return(true));
+        ON_CALL(mock_ota_controller, init(_)).WillByDefault(Return(true));
+        ON_CALL(mock_ota_controller, check_pending_verify()).WillByDefault(Return(false));
+        ON_CALL(mock_ota_controller, get_running_version()).WillByDefault(Return(std::nullopt));
+        ON_CALL(mock_ota_controller, confirm_firmware(_)).WillByDefault(Return(OtaActionResult{
+            .success = true,
+            .exec_result = farm::OtaExecResult::CONFIRMED_SUCCESS,
+            .error_code = farm::OtaErrorCode::NONE}));
+        ON_CALL(mock_ota_controller, execute_download(_)).WillByDefault(Return(OtaActionResult{
+            .success = true,
+            .exec_result = farm::OtaExecResult::CONFIRMED_SUCCESS,
+            .error_code = farm::OtaErrorCode::NONE}));
+
         ON_CALL(mock_wifi, init(_)).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_time_manager, init(_)).WillByDefault(Return(ESP_OK));
         ON_CALL(Const(mock_time_manager), is_synchronized()).WillByDefault(Return(true));
@@ -148,7 +159,7 @@ protected:
             mock_rtos,
             logic,
             mock_wifi,
-            mock_ota,
+            mock_ota_controller,
             mock_btn_trigger,
             mock_system_hal,
             mock_time_manager,
@@ -172,8 +183,8 @@ TEST_F(WaterTankAppTest, Init_Success_ConfiguresDependencies)
     EXPECT_CALL(mock_core_storage, init(_, _)).Times(1);
     EXPECT_CALL(mock_tank_storage, init_app_data(_, _)).Times(1);
 
-    // 2. OTA Manager is initialized
-    EXPECT_CALL(mock_ota, init(_)).Times(1);
+    // 2. OTA Controller is initialized
+    EXPECT_CALL(mock_ota_controller, init(_)).Times(1);
 
     // Wifi manager is initialized but not connected since is_logging=false
     EXPECT_CALL(mock_wifi, init(_)).Times(1);
@@ -187,9 +198,9 @@ TEST_F(WaterTankAppTest, Init_Success_ConfiguresDependencies)
 // Init Failure Tests
 // ==============================================================================
 
-TEST_F(WaterTankAppTest, Init_OtaManagerFail_ReturnsErrorImmediately)
+TEST_F(WaterTankAppTest, Init_OtaControllerFail_ReturnsErrorImmediately)
 {
-    EXPECT_CALL(mock_ota, init(_)).WillOnce(Return(false));
+    EXPECT_CALL(mock_ota_controller, init(_)).WillOnce(Return(false));
     EXPECT_CALL(mock_wifi, init(_)).Times(0);
 
     esp_err_t ret = sut->init(false);
@@ -462,8 +473,12 @@ TEST_F(WaterTankAppTest, Run_WhenRecoveryScan_WaitsCommReadyAndRetriesReportSend
 TEST_F(WaterTankAppTest, Run_PendingFirmwareVerify_MarksPartitionValid_WhenSessionHealthy)
 {
     // Arrange: Mock pending OTA verification state in run()
-    EXPECT_CALL(mock_ota, check_pending_verify()).WillOnce(Return(true));
-    EXPECT_CALL(mock_ota, confirm_app_valid()).WillOnce(Return(true));
+    EXPECT_CALL(mock_ota_controller, check_pending_verify()).WillOnce(Return(true));
+    EXPECT_CALL(mock_ota_controller, confirm_firmware(true))
+        .WillOnce(Return(OtaActionResult{
+            .success = true,
+            .exec_result = farm::OtaExecResult::CONFIRMED_SUCCESS,
+            .error_code = farm::OtaErrorCode::NONE}));
     EXPECT_CALL(mock_comm, get_node_state()).WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
     EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).WillRepeatedly(Return(ESP_OK));
 
@@ -477,29 +492,26 @@ TEST_F(WaterTankAppTest, Run_PendingFirmwareVerify_MarksPartitionValid_WhenSessi
 TEST_F(WaterTankAppTest, Run_RollsBackFirmware_WhenSessionNotHealthy)
 {
     // Arrange: Mock pending_verify state and healthy = false
-    EXPECT_CALL(mock_ota, check_pending_verify()).WillOnce(Return(true));
-
-    // Make session unhealthy by failing WiFi initialization (or another component after wifi is connected/started)
-    // To test disconnect_stop_wifi, wifi get_state must be != UNINITIALIZED and != INITIALIZED
-    EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::CONNECTED_GOT_IP));
-    EXPECT_CALL(mock_wifi, init(_)).WillOnce(Return(ESP_FAIL));
+    EXPECT_CALL(mock_ota_controller, check_pending_verify()).WillOnce(Return(true));
+    EXPECT_CALL(mock_ota_controller, confirm_firmware(false))
+        .WillOnce(Return(OtaActionResult{
+            .success = false,
+            .exec_result = farm::OtaExecResult::ROLLBACK_TRIGGERED,
+            .error_code = farm::OtaErrorCode::HEALTH_CHECK_FAILED}));
 
     // Check firmware will call wait_for_comm_ready -> comm_.get_node_state()
     EXPECT_CALL(mock_comm, get_node_state()).WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
-    EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).WillRepeatedly(Return(ESP_OK));
 
-    // Then disconnect_stop_wifi() will be called
-    EXPECT_CALL(mock_wifi, disconnect(_)).WillOnce(Return(ESP_OK));
-    EXPECT_CALL(mock_wifi, stop(_)).WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_wifi, disconnect(_)).WillRepeatedly(Return(ESP_OK));
+    EXPECT_CALL(mock_wifi, stop(_)).WillRepeatedly(Return(ESP_OK));
 
     // We expect rollback to be called because pending_firmware_verify_ = true and session_healthy_ = false
-    EXPECT_CALL(mock_ota, rollback_and_reboot()).Times(1);
+    EXPECT_CALL(mock_ota_controller, rollback_and_reboot()).Times(1);
 
-    // Act
-    esp_err_t ret = sut->init(false);
-
-    // Assert
-    EXPECT_EQ(ret, ESP_FAIL);
+    sut->init(false);
+    sut->set_session_healthy(false);
+    sut->run(true);
 }
 
 TEST_F(WaterTankAppTest, OnOtaTriggered_EntersWifiListeningMode)
@@ -509,8 +521,9 @@ TEST_F(WaterTankAppTest, OnOtaTriggered_EntersWifiListeningMode)
 
     EXPECT_CALL(mock_comm, deinit()).Times(2);
     EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::CONNECTED_GOT_IP));
-    EXPECT_CALL(mock_ota, start_ota()).Times(1);
-    EXPECT_CALL(mock_ota, get_status()).WillRepeatedly(Return(OtaStatus::READY_TO_RESTART));
+    EXPECT_CALL(mock_ota_controller, execute_download(_))
+        .WillOnce(Return(OtaActionResult{.success = true}));
+    EXPECT_CALL(mock_system_hal, restart()).Times(1);
 
     sut->run(true);
 }
@@ -594,8 +607,8 @@ TEST_F(WaterTankAppTest, Run_ProcessesStartOtaCommand)
 
     EXPECT_CALL(mock_comm, deinit()).Times(2);
     EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::CONNECTED_GOT_IP));
-    EXPECT_CALL(mock_ota, start_ota()).Times(1);
-    EXPECT_CALL(mock_ota, get_status()).WillRepeatedly(Return(OtaStatus::READY_TO_RESTART));
+    EXPECT_CALL(mock_ota_controller, execute_download(_)).WillOnce(Return(OtaActionResult{.success = true}));
+    EXPECT_CALL(mock_system_hal, restart()).Times(1);
 
     sut->run(true);
 }
@@ -657,11 +670,15 @@ TEST_F(WaterTankAppTest, Run_CancelsOta_WhenOtaFails)
 
     EXPECT_CALL(mock_comm, deinit()).Times(2);
     EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::CONNECTED_GOT_IP));
-    EXPECT_CALL(mock_ota, start_ota()).Times(1);
+    EXPECT_CALL(mock_ota_controller, execute_download(_))
+        .WillOnce(Return(OtaActionResult{
+            .success = false,
+            .exec_result = farm::OtaExecResult::DOWNLOAD_FAILED,
+            .error_code = farm::OtaErrorCode::HTTP_DOWNLOAD_FAILED}));
 
-    EXPECT_CALL(mock_ota, get_status()).WillRepeatedly(Return(OtaStatus::FAILED));
-    EXPECT_CALL(mock_ota, get_last_error()).WillOnce(Return(OtaFailReason::MANIFEST_HTTP_FAIL));
-    EXPECT_CALL(mock_ota, cancel_ota()).Times(1);
+    EXPECT_CALL(mock_comm, init(_)).WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_comm, get_node_state()).WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
+    EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).Times(2).WillRepeatedly(Return(ESP_OK));
 
     sut->run(true);
 }
@@ -714,13 +731,11 @@ TEST_F(WaterTankAppTest, ProcessPendingOta_FailsOnWatchdogTimeoutAndLogs)
     EXPECT_CALL(mock_wifi, get_state()).WillRepeatedly(Return(wifi_manager::State::CONNECTED_GOT_IP));
 
     EXPECT_CALL(mock_comm, deinit()).Times(1);
-    EXPECT_CALL(mock_ota, start_ota()).Times(1);
-
-    EXPECT_CALL(mock_ota, get_status()).WillRepeatedly(Return(OtaStatus::DOWNLOADING));
-
-    EXPECT_CALL(mock_rtos, task_delay(pdMS_TO_TICKS(500))).Times(testing::AtLeast(1));
-
-    EXPECT_CALL(mock_ota, cancel_ota()).Times(1);
+    EXPECT_CALL(mock_ota_controller, execute_download(_))
+        .WillOnce(Return(OtaActionResult{
+            .success = false,
+            .exec_result = farm::OtaExecResult::DOWNLOAD_FAILED,
+            .error_code = farm::OtaErrorCode::WATCHDOG_TIMEOUT}));
 
     EXPECT_CALL(mock_comm, init(_)).WillOnce(Return(ESP_OK));
     EXPECT_CALL(mock_comm, set_channel_policy(espnow::ChannelPolicy::FIXED)).Times(1);
@@ -734,7 +749,11 @@ TEST_F(WaterTankAppTest, CheckFirmwareHealthy_ConfirmsAppAndSendsReportOnSuccess
 {
     sut->set_session_healthy(true);
 
-    EXPECT_CALL(mock_ota, confirm_app_valid()).WillOnce(Return(true));
+    EXPECT_CALL(mock_ota_controller, confirm_firmware(true))
+        .WillOnce(Return(OtaActionResult{
+            .success = true,
+            .exec_result = farm::OtaExecResult::CONFIRMED_SUCCESS,
+            .error_code = farm::OtaErrorCode::NONE}));
 
     EXPECT_CALL(mock_comm, get_node_state()).WillRepeatedly(Return(espnow::NodeState::OPERATIONAL));
     EXPECT_CALL(mock_comm, send_data(_, _, _, _, _)).WillOnce(Return(ESP_OK));
@@ -745,7 +764,7 @@ TEST_F(WaterTankAppTest, CheckFirmwareHealthy_ConfirmsAppAndSendsReportOnSuccess
 TEST_F(WaterTankAppTest, UpdateRunningVersion_PopulatesCoreVersion)
 {
     OtaVersion mock_desc{1, 2, 3};
-    EXPECT_CALL(mock_ota, get_running_version()).WillRepeatedly(Return(mock_desc));
+    EXPECT_CALL(mock_ota_controller, get_running_version()).WillRepeatedly(Return(mock_desc));
 
     sut->init(false);
 

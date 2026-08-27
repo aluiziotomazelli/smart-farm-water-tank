@@ -17,7 +17,7 @@
 #include "interfaces/i_hal_timer.hpp"
 #include "interfaces/i_hal_freertos.hpp"
 #include "interfaces/i_ota_trigger.hpp"
-#include "interfaces/i_ota_manager.hpp"
+#include "interfaces/i_ota_controller.hpp"
 #include "interfaces/i_hal_system.hpp"
 #include "interfaces/i_time_manager.hpp"
 #include "interfaces/i_led_controller.hpp"
@@ -49,7 +49,7 @@ public:
         idf_hals::IHalFreertos& rtos,
         WaterTankLogic& logic,
         wifi_manager::IWiFiManager& wifi,
-        IOtaManager& ota_manager,
+        IOtaController& ota_controller,
         IOtaTrigger& btn_trigger,
         idf_hals::ISystemHAL& system_hal,
         time_manager::ITimeManager& time_manager,
@@ -85,7 +85,7 @@ private:
     idf_hals::IHalFreertos& rtos_;
     WaterTankLogic& logic_;
     wifi_manager::IWiFiManager& wifi_;
-    IOtaManager& ota_manager_;
+    IOtaController& ota_controller_;
     IOtaTrigger& btn_trigger_;
     idf_hals::ISystemHAL& system_hal_;
     time_manager::ITimeManager& time_manager_;
@@ -120,7 +120,7 @@ protected:
     esp_err_t init_wifi();
     esp_err_t init_time_manager();
     esp_err_t init_espnow();
-    esp_err_t init_ota_manager();
+    esp_err_t init_ota_controller();
     esp_err_t init_core_storage();
 
     esp_err_t init_tank_storage();

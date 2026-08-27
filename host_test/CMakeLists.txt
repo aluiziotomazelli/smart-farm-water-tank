@@ -17,6 +17,7 @@ endif()
 add_test(NAME test_water_tank_geometry COMMAND ../test_water_tank_geometry/build/test_water_tank_geometry.elf)
 add_test(NAME test_water_tank_logic COMMAND ../test_water_tank_logic/build/test_water_tank_logic.elf)
 add_test(NAME test_tank_command_handler COMMAND ../test_tank_command_handler/build/test_tank_command_handler.elf)
+add_test(NAME test_ota_controller COMMAND ../test_ota_controller/build/test_ota_controller.elf)
 add_test(NAME test_water_tank_app COMMAND ../test_water_tank_app/build/test_water_tank_app.elf)
 
 # Unified Coverage Configuration
@@ -50,6 +51,7 @@ add_custom_target(build_all_tests
     COMMAND idf.py -C ../test_water_tank_geometry build
     COMMAND idf.py -C ../test_water_tank_logic build
     COMMAND idf.py -C ../test_tank_command_handler build
+    COMMAND idf.py -C ../test_ota_controller build
     COMMAND idf.py -C ../test_water_tank_app build
     COMMENT "Building all test projects using idf.py"
 )
