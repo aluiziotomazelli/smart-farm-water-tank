@@ -40,6 +40,7 @@ WaterTankApp::WaterTankApp(
     floatswitch::IFloatSwitch& float_switch,
     espnow::IEspNowManager& comm,
     QueueHandle_t rx_queue,
+    ITankCommandHandler& command_handler,
     power_control::IPowerControl& power,
     idf_hals::ISleepHAL& sleep,
     battery_monitor::IBatteryMonitor& battery_monitor,
@@ -49,7 +50,6 @@ WaterTankApp::WaterTankApp(
     wifi_manager::IWiFiManager& wifi,
     IOtaManager& ota_manager,
     IOtaTrigger& btn_trigger,
-    IOtaTrigger& espnow_trigger,
     idf_hals::ISystemHAL& system_hal,
     time_manager::ITimeManager& time_manager,
     ILedController& led_controller)
@@ -59,6 +59,7 @@ WaterTankApp::WaterTankApp(
     , float_switch_(float_switch)
     , espnow_(comm)
     , rx_queue_(rx_queue)
+    , command_handler_(command_handler)
     , power_(power)
     , sleep_(sleep)
     , battery_monitor_(battery_monitor)
@@ -68,7 +69,6 @@ WaterTankApp::WaterTankApp(
     , wifi_(wifi)
     , ota_manager_(ota_manager)
     , btn_trigger_(btn_trigger)
-    , espnow_trigger_(espnow_trigger)
     , system_hal_(system_hal)
     , time_manager_(time_manager)
     , led_controller_(led_controller)
@@ -179,7 +179,6 @@ bool WaterTankApp::run(bool enter_sleep)
     process_node_state();
 
     btn_trigger_.arm(*this);
-    espnow_trigger_.arm(*this);
 
     // 2. Read auxiliary sensors (FloatSwitch & Battery) while sensor warms up
     floatswitch_tank_full_ = float_switch_.is_tank_full();
@@ -254,11 +253,28 @@ bool WaterTankApp::run(bool enter_sleep)
         ESP_LOGE(TAG, "Failed to send report: %s", esp_err_to_name(send_err));
     }
 
-    // 7. Listen for incoming messages
-    uint64_t override_sleep_us = listen_for_messages(LISTEN_WINDOW_MS);
+    // 7. Listen for incoming messages & commands
+    TankCommandProcessResult cmd_res = command_handler_.process(LISTEN_WINDOW_MS);
 
-    // 9. Handle OTA triggers & firmware verification
-    if (ota_triggered_) {
+    if (cmd_res.time_synced) {
+        core_.has_valid_time = time_manager_.is_synchronized();
+        core_.last_sync_unix_time_ms = time_manager_.get_timestamp_ms();
+        pending_core_commit_ = true;
+    }
+
+    if (cmd_res.reboot_requested) {
+        ESP_LOGW(TAG, "Reboot requested via command; persisting state and restarting...");
+        save_persistent_state();
+        rtos_.task_delay(pdMS_TO_TICKS(100));
+        espnow_.deinit();
+        wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
+        wifi_.stop(DISCONNECT_WIFI_TIMEOUT_MS);
+        system_hal_.restart();
+        return false;
+    }
+
+    // 8. Handle OTA triggers & firmware verification
+    if (cmd_res.ota_requested || ota_triggered_) {
         process_pending_ota();
     }
 
@@ -266,14 +282,14 @@ bool WaterTankApp::run(bool enter_sleep)
         check_firmware_healthy();
     }
 
-    // 10. Calculate sleep time & determine GPIO wakeup status
-    uint64_t sleep_time_us = (override_sleep_us > 0) ? override_sleep_us : logic_.calculate_sleep_time_us(stats_);
+    // 9. Calculate sleep time & determine GPIO wakeup status
+    uint64_t sleep_time_us = (cmd_res.override_sleep_us > 0) ? cmd_res.override_sleep_us : logic_.calculate_sleep_time_us(stats_);
     stats_.gpio_wakeup_enabled = float_switch_.should_enable_wakeup();
 
-    // 11. Save updated state (Core & Tank Storage)
+    // 10. Save updated state (Core & Tank Storage)
     save_persistent_state();
 
-    // 12. Enter deep sleep (or delay if enter_sleep is false for testing)
+    // 11. Enter deep sleep (or delay if enter_sleep is false for testing)
     if (enter_sleep) {
         enter_deep_sleep(sleep_time_us);
         return false;
@@ -365,7 +381,6 @@ void WaterTankApp::enter_deep_sleep(uint64_t sleep_time_us)
 
     // Disarm triggers before going to sleep
     btn_trigger_.disarm();
-    espnow_trigger_.disarm();
 
     espnow_.deinit();
     wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
@@ -483,103 +498,6 @@ void WaterTankApp::wait_for_pairing(uint32_t timeout_ms)
     }
 }
 
-uint64_t WaterTankApp::listen_for_messages(uint32_t timeout_ms)
-{
-    uint64_t override_sleep_us = 0;
-
-    if (!rx_queue_) {
-        rtos_.task_delay(pdMS_TO_TICKS(timeout_ms));
-        return 0;
-    }
-
-    int64_t deadline_ms = (sys_timer_.get_time_us() / 1000) + timeout_ms;
-    espnow::AppMessage msg;
-
-    while ((sys_timer_.get_time_us() / 1000) < deadline_ms) {
-        int64_t remaining = deadline_ms - (sys_timer_.get_time_us() / 1000);
-        if (remaining <= 0)
-            break;
-
-        if (rtos_.queue_receive(rx_queue_, &msg, pdMS_TO_TICKS(remaining)) == pdPASS) {
-            if (msg.msg_type == espnow::MessageType::COMMAND) {
-                process_command(msg, override_sleep_us);
-            }
-        }
-    }
-
-    return override_sleep_us;
-}
-
-void WaterTankApp::send_cmd_ack(const espnow::AppMessage& msg, espnow::AckStatus status)
-{
-    if (msg.requires_ack) {
-        espnow_.confirm_reception(msg.sender_id, msg.sequence_number, status);
-    }
-}
-
-void WaterTankApp::process_command(const espnow::AppMessage& msg, uint64_t& out_override_sleep_us)
-{
-    // Generic transport commands (0x01–0x3F)
-    if (msg.payload_type <= 0x3F) {
-        switch (static_cast<espnow::CommandType>(msg.payload_type)) {
-        case espnow::CommandType::START_OTA:
-            ESP_LOGW(TAG, "Received START_OTA command from Hub - triggering OTA");
-            static_cast<EspNowOtaTrigger&>(espnow_trigger_).notify();
-            send_cmd_ack(msg, espnow::AckStatus::OK);
-            break;
-
-        case espnow::CommandType::REBOOT:
-            ESP_LOGW(TAG, "Received REBOOT command from Hub");
-            send_cmd_ack(msg, espnow::AckStatus::OK);
-            if (msg.requires_ack) {
-                rtos_.task_delay(pdMS_TO_TICKS(100)); // Allow TX task time to transmit ACK over the air
-            }
-            espnow_.deinit();
-            wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
-            wifi_.stop(DISCONNECT_WIFI_TIMEOUT_MS);
-            system_hal_.restart();
-            break;
-
-        default:
-            send_cmd_ack(msg, espnow::AckStatus::ERROR_PROCESSING);
-            break;
-        }
-    }
-    // Farm application commands (0x40–0xFF)
-    else {
-        switch (static_cast<farm::CommandType>(msg.payload_type)) {
-        case farm::CommandType::SLEEP_OVERRIDE:
-            if (msg.payload_len >= sizeof(farm::SleepOverrideCommand)) {
-                farm::SleepOverrideCommand sleep_cmd{};
-                memcpy(&sleep_cmd, msg.payload, sizeof(sleep_cmd));
-                out_override_sleep_us = static_cast<uint64_t>(sleep_cmd.sleep_time_s) * 1000000ULL;
-                ESP_LOGI(TAG, "Received SLEEP_OVERRIDE: %lu s", static_cast<unsigned long>(sleep_cmd.sleep_time_s));
-                send_cmd_ack(msg, espnow::AckStatus::OK);
-            }
-            else {
-                send_cmd_ack(msg, espnow::AckStatus::ERROR_INVALID_DATA);
-            }
-            break;
-
-        case farm::CommandType::SYNC_TIME:
-            if (msg.payload_len >= sizeof(farm::TimeSyncCommand)) {
-                farm::TimeSyncCommand farm_cmd{};
-                memcpy(&farm_cmd, msg.payload, sizeof(farm_cmd));
-                sync_time_from_espnow_packet(farm_cmd);
-                send_cmd_ack(msg, espnow::AckStatus::OK);
-            }
-            else {
-                send_cmd_ack(msg, espnow::AckStatus::ERROR_INVALID_DATA);
-            }
-            break;
-
-        default:
-            send_cmd_ack(msg, espnow::AckStatus::ERROR_PROCESSING);
-            break;
-        }
-    }
-}
-
 void WaterTankApp::process_pending_ota()
 {
     ota_triggered_ = false;
@@ -589,7 +507,6 @@ void WaterTankApp::process_pending_ota()
     // 1. Deinit radio users before OTA
     espnow_.deinit();
     btn_trigger_.disarm();
-    espnow_trigger_.disarm();
 
     bool previous_connected = (wifi_.get_state() == wifi_manager::State::CONNECTED_GOT_IP);
     bool wifi_ok = previous_connected;
@@ -810,22 +727,6 @@ void WaterTankApp::process_node_state()
         }
         wait_for_pairing(PAIRING_TIMEOUT_MS);
         return;
-    }
-}
-
-void WaterTankApp::sync_time_from_espnow_packet(const farm::TimeSyncCommand& sync_cmd)
-{
-    time_manager::TimeSyncPacket pkt{};
-    pkt.timestamp_ms = sync_cmd.timestamp_ms;
-    pkt.tz_offset_min = sync_cmd.tz_offset_min;
-    pkt.sync_source = time_manager::TimeSyncSource::ESP_NOW;
-    pkt.flags = sync_cmd.flags;
-
-    if (time_manager_.sync_from_time_packet(pkt) == ESP_OK) {
-        core_.has_valid_time = true;
-        core_.last_sync_unix_time_ms = pkt.timestamp_ms;
-        pending_core_commit_ = true;
-        ESP_LOGI(TAG, "Time synch from ESP-NOW: %llu ms", static_cast<unsigned long long>(pkt.timestamp_ms));
     }
 }
 

@@ -4,8 +4,10 @@ idf_component_register(
         "src/water_tank_app.cpp"
         "src/water_tank_logic.cpp"
         "src/tank_geometry.cpp"
+        "src/tank_command_handler.cpp"
     INCLUDE_DIRS
         "include"
+        "include/interfaces"
         "."
     REQUIRES
         smart-farm-common

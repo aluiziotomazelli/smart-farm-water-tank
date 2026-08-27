@@ -1,3 +1,4 @@
+// main/include/water_tank_app.hpp
 #pragma once
 
 #include <atomic>
@@ -7,10 +8,11 @@
 #include "interfaces/i_level_sensor.hpp"
 #include "interfaces/i_nvs_core.hpp"
 #include "i_espnow_manager.hpp"
+#include "interfaces/i_tank_command_handler.hpp"
 #include "interfaces/i_water_tank_nvs.hpp"
 #include "interfaces/i_power_control.hpp"
 #include "interfaces/i_wifi_manager.hpp"
-#include "i_float_switch.hpp" // Adding component include
+#include "i_float_switch.hpp"
 #include "interfaces/i_battery_monitor.hpp"
 #include "interfaces/i_hal_timer.hpp"
 #include "interfaces/i_hal_freertos.hpp"
@@ -39,6 +41,7 @@ public:
         floatswitch::IFloatSwitch& float_switch,
         espnow::IEspNowManager& comm,
         QueueHandle_t rx_queue,
+        ITankCommandHandler& command_handler,
         power_control::IPowerControl& power,
         idf_hals::ISleepHAL& sleep,
         battery_monitor::IBatteryMonitor& battery_monitor,
@@ -48,7 +51,6 @@ public:
         wifi_manager::IWiFiManager& wifi,
         IOtaManager& ota_manager,
         IOtaTrigger& btn_trigger,
-        IOtaTrigger& espnow_trigger,
         idf_hals::ISystemHAL& system_hal,
         time_manager::ITimeManager& time_manager,
         ILedController& led_controller);
@@ -75,6 +77,7 @@ private:
     floatswitch::IFloatSwitch& float_switch_;
     espnow::IEspNowManager& espnow_;
     QueueHandle_t rx_queue_;
+    ITankCommandHandler& command_handler_;
     power_control::IPowerControl& power_;
     idf_hals::ISleepHAL& sleep_;
     battery_monitor::IBatteryMonitor& battery_monitor_;
@@ -84,7 +87,6 @@ private:
     wifi_manager::IWiFiManager& wifi_;
     IOtaManager& ota_manager_;
     IOtaTrigger& btn_trigger_;
-    IOtaTrigger& espnow_trigger_;
     idf_hals::ISystemHAL& system_hal_;
     time_manager::ITimeManager& time_manager_;
     ILedController& led_controller_;
@@ -109,12 +111,9 @@ protected:
     void retry_reading_if_needed(ultrasonic::Reading& reading);
     bool wait_for_comm_ready(uint32_t timeout_ms);
     void wait_for_pairing(uint32_t timeout_ms);
-    uint64_t listen_for_messages(uint32_t timeout_ms);
     void process_pending_ota();
     void enter_deep_sleep(uint64_t sleep_time_us);
     void save_persistent_state();
-    void process_command(const espnow::AppMessage& msg, uint64_t& out_override_sleep_us);
-    void send_cmd_ack(const espnow::AppMessage& msg, espnow::AckStatus status);
     esp_err_t send_ota_report(farm::OtaExecResult result, farm::OtaErrorCode error_code = farm::OtaErrorCode::NONE);
     void report_ota_failure_and_restore_comm(farm::OtaErrorCode err_code, bool connected_by_us);
 
@@ -123,7 +122,6 @@ protected:
     esp_err_t init_espnow();
     esp_err_t init_ota_manager();
     esp_err_t init_core_storage();
-    void sync_time_from_espnow_packet(const farm::TimeSyncCommand& cmd);
 
     esp_err_t init_tank_storage();
     void update_running_version();
