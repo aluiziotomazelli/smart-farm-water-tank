@@ -532,6 +532,9 @@ void WaterTankApp::process_pending_ota()
             ESP_LOGI(TAG, "OTA completed successfully. Restarting...");
             wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
             wifi_.stop(DISCONNECT_WIFI_TIMEOUT_MS);
+            pending_core_commit_ = true;
+            pending_tank_commit_ = true;
+            save_persistent_state();
             system_hal_.restart();
             return;
         }
@@ -552,6 +555,8 @@ void WaterTankApp::process_pending_ota()
         espnow_.set_channel_policy(previous_connected ? espnow::ChannelPolicy::FIXED : espnow::ChannelPolicy::SCAN);
         send_ota_report(ota_res.exec_result, ota_res.error_code);
     }
+
+    btn_trigger_.arm(*this);
 }
 
 // =============================================================================
