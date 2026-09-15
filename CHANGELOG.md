@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-09-15
+
+### Fixed
+- Replaced `wait_for_comm_ready` with `ensure_communication_ready` implementing active recovery scan retries with `reconnect()` and initial yield delay.
+- Ensured synchronous Wi-Fi start on boot with 3000 ms timeout in `init_wifi()`.
+
+### Changed
+- Clarified hysteresis and deadband constants (`BACKUP_EXIT_THRESHOLD`) in `WaterTankLogic::update_operation_mode`.
+- Updated `espnow_manager` submodule to latest `main` (v1.5.2) with 2 scan attempts per channel and hardware Wi-Fi channel restore on init.
+
 ## [0.4.3] - 2026-08-31
 
 ### Changed

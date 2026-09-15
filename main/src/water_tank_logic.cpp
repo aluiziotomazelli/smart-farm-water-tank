@@ -26,6 +26,7 @@ void WaterTankLogic::process_reading(const ultrasonic::Reading& reading, WaterTa
 
 void WaterTankLogic::update_operation_mode(WaterTankStats& stats) const
 {
+    // Update failure counter using a leaky integrator (hysteresis)
     if (!ultrasonic::is_success(stats.last_result)) {
         if (stats.consecutive_failures < CONSECUTIVE_FAILURES_THRESHOLD) {
             stats.consecutive_failures++;
@@ -37,10 +38,16 @@ void WaterTankLogic::update_operation_mode(WaterTankStats& stats) const
         }
     }
 
+    // Evaluate backup mode with hysteresis:
+    // - Enter backup mode on reaching CONSECUTIVE_FAILURES_THRESHOLD (5 consecutive failures)
+    // - Exit backup mode on reaching BACKUP_EXIT_THRESHOLD (requires 2 consecutive OK readings)
+    // - Value between BACKUP_EXIT_THRESHOLD and CONSECUTIVE_FAILURES_THRESHOLD is a deadband preserving current state
+    constexpr uint8_t BACKUP_EXIT_THRESHOLD = CONSECUTIVE_FAILURES_THRESHOLD - 2; // = 3
+
     if (stats.consecutive_failures >= CONSECUTIVE_FAILURES_THRESHOLD) {
         stats.backup_mode_active = true;
     }
-    else if (stats.consecutive_failures < CONSECUTIVE_FAILURES_THRESHOLD - 1) {
+    else if (stats.consecutive_failures <= BACKUP_EXIT_THRESHOLD) {
         stats.backup_mode_active = false;
     }
 }

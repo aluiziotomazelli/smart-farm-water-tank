@@ -109,7 +109,7 @@ protected:
     esp_err_t send_report(const farm::WaterLevelReport& report);
 
     void retry_reading_if_needed(ultrasonic::Reading& reading);
-    bool wait_for_comm_ready(uint32_t timeout_ms);
+    bool ensure_communication_ready(uint8_t max_scan_attempts = 3);
     void wait_for_pairing(uint32_t timeout_ms);
     void process_pending_ota();
     void enter_deep_sleep(uint64_t sleep_time_us);

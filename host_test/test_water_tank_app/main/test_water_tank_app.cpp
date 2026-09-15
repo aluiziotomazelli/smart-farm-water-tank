@@ -45,7 +45,10 @@ public:
 
     void set_session_healthy(bool healthy) { session_healthy_ = healthy; }
 
-    bool call_wait_for_comm_ready(uint32_t timeout_ms) { return wait_for_comm_ready(timeout_ms); }
+    bool call_ensure_communication_ready(uint8_t max_scan_attempts = 3)
+    {
+        return ensure_communication_ready(max_scan_attempts);
+    }
     void call_process_pending_ota() { process_pending_ota(); }
     void call_check_firmware_healthy() { check_firmware_healthy(); }
 };
@@ -132,6 +135,7 @@ protected:
         ON_CALL(Const(mock_time_manager), is_synchronized()).WillByDefault(Return(true));
         ON_CALL(mock_wifi, add_credentials(_, _)).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_wifi, start()).WillByDefault(Return(ESP_OK));
+        ON_CALL(mock_wifi, start(_)).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_comm, init(_)).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_float_switch, init()).WillByDefault(Return(ESP_OK));
         ON_CALL(mock_sensor, init()).WillByDefault(Return(ESP_OK));
@@ -685,30 +689,46 @@ TEST_F(WaterTankAppTest, Run_CancelsOta_WhenOtaFails)
 
 // --- Protected Methods Direct Tests ---
 
-TEST_F(WaterTankAppTest, WaitForCommReady_ReturnsFalseIfNotRecoveryOrOperational)
+TEST_F(WaterTankAppTest, EnsureCommunicationReady_ReturnsTrueImmediatelyIfAlreadyOperational)
 {
-    EXPECT_CALL(mock_comm, get_node_state()).WillOnce(Return(espnow::NodeState::UNINITIALIZED));
-    EXPECT_FALSE(sut->call_wait_for_comm_ready(100));
+    EXPECT_CALL(mock_comm, get_node_state()).WillOnce(Return(espnow::NodeState::OPERATIONAL));
+    EXPECT_CALL(mock_rtos, task_delay(pdMS_TO_TICKS(100))).Times(1);
+    EXPECT_TRUE(sut->call_ensure_communication_ready(3));
 }
 
-TEST_F(WaterTankAppTest, WaitForCommReady_WaitsAndReturnsTrueIfRecovers)
+TEST_F(WaterTankAppTest, EnsureCommunicationReady_WaitsAndReturnsTrueIfRecovers)
 {
     EXPECT_CALL(mock_comm, get_node_state())
         .WillOnce(Return(espnow::NodeState::RECOVERY_SCAN))
         .WillOnce(Return(espnow::NodeState::OPERATIONAL));
 
     EXPECT_CALL(mock_rtos, task_delay(pdMS_TO_TICKS(100))).Times(1);
+    EXPECT_CALL(mock_rtos, task_delay(pdMS_TO_TICKS(30))).Times(1);
 
-    EXPECT_TRUE(sut->call_wait_for_comm_ready(1000));
+    EXPECT_TRUE(sut->call_ensure_communication_ready(3));
 }
 
-TEST_F(WaterTankAppTest, WaitForCommReady_WaitsAndReturnsFalseIfTimeout)
+TEST_F(WaterTankAppTest, EnsureCommunicationReady_CallsReconnectWhenIdleAndRecovers)
+{
+    EXPECT_CALL(mock_comm, get_node_state())
+        .WillOnce(Return(espnow::NodeState::IDLE))
+        .WillOnce(Return(espnow::NodeState::RECOVERY_SCAN))
+        .WillOnce(Return(espnow::NodeState::OPERATIONAL));
+
+    EXPECT_CALL(mock_comm, reconnect()).WillOnce(Return(ESP_OK));
+    EXPECT_CALL(mock_rtos, task_delay(pdMS_TO_TICKS(100))).Times(1);
+    EXPECT_CALL(mock_rtos, task_delay(pdMS_TO_TICKS(30))).Times(2);
+
+    EXPECT_TRUE(sut->call_ensure_communication_ready(3));
+}
+
+TEST_F(WaterTankAppTest, EnsureCommunicationReady_WaitsAndReturnsFalseIfAllAttemptsFail)
 {
     EXPECT_CALL(mock_comm, get_node_state()).WillRepeatedly(Return(espnow::NodeState::RECOVERY_SCAN));
+    EXPECT_CALL(mock_rtos, task_delay(pdMS_TO_TICKS(100))).Times(1);
+    EXPECT_CALL(mock_rtos, task_delay(pdMS_TO_TICKS(30))).Times(testing::AtLeast(1));
 
-    EXPECT_CALL(mock_rtos, task_delay(pdMS_TO_TICKS(100))).Times(testing::AtLeast(1));
-
-    EXPECT_FALSE(sut->call_wait_for_comm_ready(500));
+    EXPECT_FALSE(sut->call_ensure_communication_ready(2));
 }
 
 TEST_F(WaterTankAppTest, ProcessPendingOta_ConnectsWifiAndRollbacksOnFail)

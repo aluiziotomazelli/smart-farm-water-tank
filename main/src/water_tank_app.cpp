@@ -21,7 +21,7 @@ static constexpr uint8_t DEFAULT_SAMPLE_COUNT = 11;
 static constexpr uint32_t LISTEN_WINDOW_MS = 200;
 static constexpr uint32_t NVS_COMMIT_INTERVAL = 10;
 
-static constexpr uint32_t RECOVERY_SCAN_WAIT_MS =
+static constexpr uint32_t SINGLE_PASS_TIMEOUT_MS =
     espnow::SCAN_CHANNEL_TIMEOUT_MS * espnow::SCAN_CHANNEL_ATTEMPTS * 13 + 200;
 static constexpr uint32_t PAIRING_TIMEOUT_MS = 60000;
 
@@ -238,10 +238,10 @@ bool WaterTankApp::run(bool enter_sleep)
     else {
         ESP_LOGW(TAG, "Failed to send report on first attempt: %s", esp_err_to_name(send_err));
         led_controller_.set_pattern(BlinkPattern::ERROR_BURST);
-        if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
+        if (ensure_communication_ready(3)) {
             send_err = send_report(report);
             if (send_err == ESP_OK) {
-                ESP_LOGI(TAG, "Report sent to Hub on second attempt.");
+                ESP_LOGI(TAG, "Report sent to Hub on retry.");
             }
         }
     }
@@ -458,31 +458,42 @@ void WaterTankApp::save_persistent_state()
     }
 }
 
-bool WaterTankApp::wait_for_comm_ready(uint32_t timeout_ms)
+bool WaterTankApp::ensure_communication_ready(uint8_t max_scan_attempts)
 {
-    espnow::NodeState state = espnow_.get_node_state();
+    // Yield to allow RX task to process any pending notifications (e.g., MAX_FAILURES from TxManager)
+    rtos_.task_delay(pdMS_TO_TICKS(100));
 
-    if (state == espnow::NodeState::RECOVERY_SCAN || state == espnow::NodeState::IDLE) {
-        constexpr uint32_t POLL_DELAY_MS = 100;
-        int64_t deadline_ms = (sys_timer_.get_time_us() / 1000) + timeout_ms;
+    espnow::NodeState state = espnow_.get_node_state();
+    if (state == espnow::NodeState::OPERATIONAL) {
+        return true;
+    }
+
+    constexpr uint32_t POLL_DELAY_MS = 30;
+
+    for (uint8_t attempt = 1; attempt <= max_scan_attempts; ++attempt) {
+        if (state == espnow::NodeState::IDLE) {
+            espnow_.reconnect();
+        }
+
+        int64_t deadline_ms = (sys_timer_.get_time_us() / 1000) + SINGLE_PASS_TIMEOUT_MS;
 
         while ((sys_timer_.get_time_us() / 1000) < deadline_ms) {
             rtos_.task_delay(pdMS_TO_TICKS(POLL_DELAY_MS));
             state = espnow_.get_node_state();
 
             if (state == espnow::NodeState::OPERATIONAL) {
-                ESP_LOGI(TAG, "ESP-NOW recovered channel during wait window");
+                ESP_LOGI(TAG, "ESP-NOW recovered channel on attempt %u", attempt);
                 return true;
+            }
+
+            if (state == espnow::NodeState::IDLE) {
+                break;
             }
         }
     }
 
-    if (state != espnow::NodeState::OPERATIONAL) {
-        ESP_LOGE(TAG, "ESP-NOW NodeState not ready after wait: %d", static_cast<int>(state));
-        return false;
-    }
-
-    return true;
+    ESP_LOGE(TAG, "ESP-NOW failed to recover after %u attempts (state: %d)", max_scan_attempts, static_cast<int>(state));
+    return false;
 }
 
 void WaterTankApp::wait_for_pairing(uint32_t timeout_ms)
@@ -573,7 +584,7 @@ esp_err_t WaterTankApp::init_wifi()
     if ((err = wifi_.add_credentials(WIFI_SSID, WIFI_PASS)) != ESP_OK) {
         ESP_LOGW(TAG, "Failed to set WiFi credentials: %s", esp_err_to_name(err));
     }
-    if ((err = wifi_.start()) != ESP_OK) {
+    if ((err = wifi_.start(3000)) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start WiFiManager: %s", esp_err_to_name(err));
         return err;
     }
@@ -643,7 +654,7 @@ void WaterTankApp::check_firmware_healthy()
             static_cast<int>(verify_res.error_code));
         led_controller_.set_pattern(BlinkPattern::ERROR_BURST);
 
-        if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
+        if (ensure_communication_ready()) {
             send_ota_report(verify_res.exec_result, verify_res.error_code);
         }
         wifi_.disconnect(DISCONNECT_WIFI_TIMEOUT_MS);
@@ -656,7 +667,7 @@ void WaterTankApp::check_firmware_healthy()
     ESP_LOGI(TAG, "Firmware confirmed successfully. Version: %d.%d.%d", core_.fw_major, core_.fw_minor, core_.fw_patch);
     led_controller_.set_pattern(BlinkPattern::BOOT_SUCCESS);
 
-    if (wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
+    if (ensure_communication_ready()) {
         send_ota_report(verify_res.exec_result, verify_res.error_code);
     }
 }
@@ -723,7 +734,7 @@ void WaterTankApp::process_node_state()
 
 esp_err_t WaterTankApp::send_ota_report(farm::OtaExecResult result, farm::OtaErrorCode error_code)
 {
-    if (!wait_for_comm_ready(RECOVERY_SCAN_WAIT_MS)) {
+    if (!ensure_communication_ready()) {
         return ESP_ERR_INVALID_STATE;
     }
 
