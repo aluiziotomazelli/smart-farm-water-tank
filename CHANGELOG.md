@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] - 2026-09-23
+
+### Changed
+- Configured `float_switch_config.wakeup_on` to `WakeupCondition::WHEN_TANK_IS_EMPTY` in `main.cpp` following the physical installation and wiring of the float switch to GPIO 2.
+- Bumped firmware version to `0.4.5`.
+
 ## [0.4.4] - 2026-09-15
 
 ### Fixed

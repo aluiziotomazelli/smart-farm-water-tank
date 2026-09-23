@@ -77,7 +77,7 @@ floatswitch::Config float_switch_config = {
     .normally_open = true,
     .debounce_time_us = 50000,
     .active_level = floatswitch::ActiveLevel::LOW,
-    .wakeup_on = floatswitch::WakeupCondition::NEVER};
+    .wakeup_on = floatswitch::WakeupCondition::WHEN_TANK_IS_EMPTY};
 
 static floatswitch::FloatSwitch float_switch{float_switch_config, hal_gpio, hal_timer, hal_sys_rom};
 
